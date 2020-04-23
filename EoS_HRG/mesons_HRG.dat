@@ -1,0 +1,16 @@
+# only enter the name of a particle or antiparticle, not both
+# Ex: pi+ will automatically take into account pi-
+pi+
+pi0
+eta
+K+
+K0
+eta'(958)
+rho(770)+
+rho(770)0
+K*(892)+
+K*(892)0
+omega(782)
+phi(1020)
+a(1)(1260)+
+a(1)(1260)0

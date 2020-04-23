@@ -1,0 +1,24 @@
+# only enter the name of a particle or antiparticle, not both
+# Ex: Omega- will automatically take into account Omega+
+p
+n
+N(1440)+
+N(1440)0
+N(1535)+
+N(1535)0
+Delta(1232)++
+Delta(1232)+
+Delta(1232)0
+Delta(1232)-
+Lambda
+Sigma+
+Sigma0
+Sigma-
+Sigma(1385)+
+Sigma(1385)0
+Sigma(1385)-
+Xi0
+Xi-
+Xi(1530)0
+Xi(1530)-
+Omega-
