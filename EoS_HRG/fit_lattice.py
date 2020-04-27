@@ -316,7 +316,7 @@ def lattice_data(EoS,muB):
 ###############################################################################
 def EoS_nS0(fun,xT,muB,**kwargs):
     """
-    Calculation of the EoS at (T,muB) defined by the input function with the conditions:
+    Calculation of the EoS defined by the input function at (T,muB) with the conditions:
     <n_S> = 0
     <n_Q> = factQB*<n_B>
     """
@@ -338,7 +338,7 @@ def EoS_nS0(fun,xT,muB,**kwargs):
             thermo = fun(T,muB,mu[0],mu[1],**kwargs)
             return [thermo['n_S'], thermo['n_Q']-factQB*thermo['n_B']]
             
-        solution = scipy.optimize.root(system,[-0.08*muB,0.03*muB]).x
+        solution = scipy.optimize.root(system,[-0.08*muB,0.03*muB],method='lm').x
         muQ = solution[0]
         muS = solution[1]
         result = fun(T,muB,muQ,muS,**kwargs)
@@ -353,11 +353,15 @@ def EoS_nS0(fun,xT,muB,**kwargs):
         s = np.zeros_like(xT)
         nB = np.zeros_like(xT)
         e = np.zeros_like(xT)
+        muQ = np.zeros_like(xT)
+        muS = np.zeros_like(xT)
         for i,T in enumerate(xT):
             result = EoS_nS0(fun,T,muB,**kwargs)
             p[i] = result['P']
             s[i] = result['s']
             nB[i] = result['n_B']
             e[i] = result['e']
+            muQ[i] = result['muQ']
+            muS[i] = result['muS']
     
-    return {'T':xT, 'P':p, 's':s, 'n_B':nB, 'e':e} 
+    return {'T':xT, 'muQ': muQ, 'muS': muS, 'P':p, 's':s, 'n_B':nB, 'e':e} 

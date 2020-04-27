@@ -7,16 +7,16 @@ import argparse
 # import from __init__.py
 from . import *
 # import functions to evaluate
-from EoS_HRG.full_EoS import full_EoS
+from EoS_HRG.full_EoS import full_EoS, full_EoS_nS0, find_param
 # for the plots, import plots of lQCD data
 from EoS_HRG.test.plot_lattice import plot_lattice
-from EoS_HRG.fit_lattice import lattice_data, Tc_lattice, EoS_nS0
+from EoS_HRG.fit_lattice import lattice_data, Tc_lattice
 
 # directory where the fit_lattice_test.py is located
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 ###############################################################################
-__doc__ = """
+__doc__ = """ 
 Produce plots for the HRG+lQCD EoS defined in EoS_HRG.full_EoS:
     - EoS as a function of T and muB in comparison with lQCD data from EoS_HRG.fit_lattice
     - isentropic trajectories at fixed values of s/n_B
@@ -74,7 +74,7 @@ def main(EoS,tab):
         if(EoS!='nS0'):
             yval = full_EoS(xtemp,muB,0.,0.,offshell=args.offshell)
         else:
-            yval = EoS_nS0(full_EoS,xtemp,muB,offshell=args.offshell)
+            yval = full_EoS_nS0(xtemp,muB,offshell=args.offshell)
 
         # plot the resulting curve
         for ipl,quant in enumerate(list_quant):
@@ -121,7 +121,7 @@ def isentropic(EoS,tab):
     if(EoS!='nS0'):
         fEoS = lambda xT,xmuB : full_EoS(xT,xmuB,0.,0.)
     else:
-        fEoS = lambda xT,xmuB : EoS_nS0(full_EoS,xT,xmuB)
+        fEoS = lambda xT,xmuB : full_EoS_nS0(xT,xmuB)
 
     def system(muB,xT,snB):
         """
@@ -165,6 +165,65 @@ def isentropic(EoS,tab):
     ax.set_ylim(0.,0.5)
     f.savefig(f"{dir_path}/fullEoS_isentropic_{EoS}.png")
 
+@timef
+def test_find(EoS):
+    """
+    test accuracy of the find_param function in EoS_HRG.full_EoS
+    """
+
+    hbarc = 0.1973269804 # GeV.fm   
+
+    print(EoS)
+
+    if(EoS=='full'):
+        Nunk = 4
+        fun = lambda T,muB,muQ,muS : full_EoS(T,muB,muQ,muS)
+    elif(EoS=='muB'):
+        Nunk = 2
+        fun = lambda T,muB,mQ,muS : full_EoS(T,muB,0.,0.)
+    elif(EoS=='nS0'):
+        Nunk = 2
+        fun = lambda T,muB,mQ,muS : full_EoS_nS0(T,muB)
+
+    xtrue = np.zeros(Nunk) # record when a certain accuracy is achieved
+    for itest in range(100):
+        if((itest+1)%20 == 0):
+            print('    ',itest+1,'%')
+
+        # first randomly pick T,muB,muQ,muS
+        T = np.random.uniform(0.05,0.8)
+        muB = np.random.uniform(-T*4.,T*4.)
+        muQ = np.random.uniform(-0.25,0.25)
+        muS = np.random.uniform(-0.25,0.25)
+        TmuB = [T,muB,muQ,muS]
+        #print(TmuB)
+
+        # evaluate thermo quantities
+        thermo = fun(T,muB,muQ,muS) # this is unitless
+        e = thermo['e']*T**4./(hbarc**3.)
+        nB = thermo['n_B']*T**3./(hbarc**3.)
+        try:
+            nQ = thermo['n_Q']*T**3./(hbarc**3.)
+            nS = thermo['n_S']*T**3./(hbarc**3.)
+        except:
+            nQ = None
+            nS = None
+
+        # solve the system to find T,muB,muQ,muS
+        sol = find_param(EoS,e=e,n_B=nB,n_Q=nQ,n_S=nS)
+
+       # print(sol)
+
+        # test accuracy of the find_param function
+        # -> compare the found T,muB,muQ,muS to their exact values
+        # 5% accuracy gives a positive (True) result
+        is_close = np.isclose(list(sol.values()),TmuB[:Nunk],rtol=0.05)
+        for i in range(Nunk):
+            if(is_close[i]):
+                xtrue[i] += 1.
+
+    print('5% accuracy in %:', dict(zip(list(sol.keys())[:Nunk],xtrue)))
+
 ###############################################################################
 if __name__ == "__main__":    
 
@@ -173,8 +232,12 @@ if __name__ == "__main__":
     main('muB',tab)
     main('nS0',tab)
 
-    # values of s/n_B to test the lQCD+HRG EoS
+    # values of s/n_B to test the lQCD+HRG EoS (takes a long time)
     tab = [[420,'r'],[144,'tab:purple'],[94,'m'],[70,'tab:orange'],[51,'tab:olive'],[30,'g']]
     isentropic('muB',tab)
     isentropic('nS0',tab)
 
+    # test the accuracy of the find_param function in EoS_HRG.full_EoS
+    test_find('full')
+    test_find('muB')
+    # test_find('nS0') # takes a long time
