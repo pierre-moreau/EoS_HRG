@@ -150,7 +150,7 @@ def param(T,muB,muQ,muS):
         e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
     
     # if the input is a list of temperature values
-    else:
+    elif(isinstance(e,np.ndarray) or isinstance(e,list)):
         p = np.zeros_like(T)
         s = np.zeros_like(T)
         nB = np.zeros_like(T)
@@ -165,6 +165,9 @@ def param(T,muB,muQ,muS):
             nQ[i] = result['n_Q']
             nS[i] = result['n_S']
             e[i] = result['e']
+
+    else:
+        raise Exception('Problem with input')
                 
     return {'T': T,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
 
@@ -348,7 +351,7 @@ def EoS_nS0(fun,xT,muB,**kwargs):
         nB = result['n_B']
         e = result['e'] 
         
-    elif(isinstance(xT,np.ndarray)):
+    elif(isinstance(xT,np.ndarray) or isinstance(e,list)):
         p = np.zeros_like(xT)
         s = np.zeros_like(xT)
         nB = np.zeros_like(xT)
@@ -363,5 +366,8 @@ def EoS_nS0(fun,xT,muB,**kwargs):
             e[i] = result['e']
             muQ[i] = result['muQ']
             muS[i] = result['muS']
+    
+    else:
+        raise Exception('Problem with input')
     
     return {'T':xT, 'muQ': muQ, 'muS': muS, 'P':p, 's':s, 'n_B':nB, 'e':e} 

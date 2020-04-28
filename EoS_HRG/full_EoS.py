@@ -52,7 +52,7 @@ def full_EoS(xT,muB,muQ,muS,**kwargs):
             s = 0.5*(1.-fmatch(T,muB))*EoSH['s']+0.5*(1.+fmatch(T,muB))*EoSL['s']+0.5*T*(EoSL['P']-EoSH['P'])*fmatchdT(T,muB)
             e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
 
-    elif(isinstance(xT,np.ndarray)):
+    elif(isinstance(xT,np.ndarray) or isinstance(e,list)):
         p = np.zeros_like(xT)
         s = np.zeros_like(xT)
         nB = np.zeros_like(xT)
@@ -67,6 +67,8 @@ def full_EoS(xT,muB,muQ,muS,**kwargs):
             nQ[i] = result['n_Q']
             nS[i] = result['n_S']
             e[i] = result['e']
+    else:
+        raise Exception('Problem with input')
     
     return {'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
 
@@ -100,44 +102,69 @@ def find_param(EoS,**kwargs):
         nQ = None
         nS = None
         if(EoS=='full'):
-            raise Exception('Please input n_Q & n_S to use the full EoS')
+            raise Exception('Please input n_Q & n_S to use the full EoS')  
 
-    if(EoS=='full'):
-        init_guess = [0.2,0.,0.,0.] # initial guess
-        output = ['T','muB','muS','muQ']
-        def system(Tmu):
-            """
-            Define the system to be solved
-            e(T,muB,muQ,muS) = e_input
-            n_B(T,muB,muQ,muS) = n_B_input
-            n_Q(T,muB,muQ,muS) = n_Q_input
-            n_S(T,muB,muQ,muS) = n_S_input
-            """
-            thermo = full_EoS(Tmu[0],Tmu[1],Tmu[2],Tmu[3],**kwargs) # this is unitless
-            return [thermo['e']*Tmu[0]**4./(hbarc**3.) - e, thermo['n_B']*Tmu[0]**3./(hbarc**3.) - nB, thermo['n_Q']*Tmu[0]**3./(hbarc**3.) - nQ, thermo['n_S']*Tmu[0]**3./(hbarc**3.) - nS]
-    elif(EoS=='muB'):
-        init_guess = [0.2,0.] # initial guess
-        output = ['T','muB']
-        def system(Tmu):
-            """
-            Define the system to be solved
-            e(T,muB,0,0) = e_input
-            n_B(T,muB,0,0) = n_B_input
-            """
-            thermo = full_EoS(Tmu[0],Tmu[1],0.,0.,**kwargs) # this is unitless
-            return [thermo['e']*Tmu[0]**4./(hbarc**3.) - e, thermo['n_B']*Tmu[0]**3./(hbarc**3.) - nB]
-    elif(EoS=='nS0'):
-        init_guess = [0.2,0.]
-        output = ['T','muB']
-        def system(Tmu):
-            """
-            Define the system to be solved
-            e_nS0(T,muB) = e_input
-            n_B_nS0(T,muB) = n_B_input
-            """
-            thermo = EoS_nS0(full_EoS,Tmu[0],Tmu[1],**kwargs) # this is unitless
-            return [thermo['e']*Tmu[0]**4./(hbarc**3.) - e, thermo['n_B']*Tmu[0]**3./(hbarc**3.) - nB]
+    # if input is a single value
+    if(isinstance(e,float)):
 
-    solution = scipy.optimize.root(system,init_guess,method='lm').x
-    
+        if(EoS=='full'):
+            init_guess = [0.2,0.,0.,0.] # initial guess
+            output = ['T','muB','muS','muQ']
+            def system(Tmu):
+                """
+                Define the system to be solved
+                e(T,muB,muQ,muS) = e_input
+                n_B(T,muB,muQ,muS) = n_B_input
+                n_Q(T,muB,muQ,muS) = n_Q_input
+                n_S(T,muB,muQ,muS) = n_S_input
+                """
+                thermo = full_EoS(Tmu[0],Tmu[1],Tmu[2],Tmu[3],**kwargs) # this is unitless
+                return [thermo['e']*Tmu[0]**4./(hbarc**3.) - e, thermo['n_B']*Tmu[0]**3./(hbarc**3.) - nB, thermo['n_Q']*Tmu[0]**3./(hbarc**3.) - nQ, thermo['n_S']*Tmu[0]**3./(hbarc**3.) - nS]
+        elif(EoS=='muB'):
+            init_guess = [0.2,0.] # initial guess
+            output = ['T','muB']
+            def system(Tmu):
+                """
+                Define the system to be solved
+                e(T,muB,0,0) = e_input
+                n_B(T,muB,0,0) = n_B_input
+                """
+                thermo = full_EoS(Tmu[0],Tmu[1],0.,0.,**kwargs) # this is unitless
+                return [thermo['e']*Tmu[0]**4./(hbarc**3.) - e, thermo['n_B']*Tmu[0]**3./(hbarc**3.) - nB]
+        elif(EoS=='nS0'):
+            init_guess = [0.2,0.]
+            output = ['T','muB']
+            def system(Tmu):
+                """
+                Define the system to be solved
+                e_nS0(T,muB) = e_input
+                n_B_nS0(T,muB) = n_B_input
+                """
+                thermo = EoS_nS0(full_EoS,Tmu[0],Tmu[1],**kwargs) # this is unitless
+                return [thermo['e']*Tmu[0]**4./(hbarc**3.) - e, thermo['n_B']*Tmu[0]**3./(hbarc**3.) - nB]
+
+        solution = scipy.optimize.root(system,init_guess,method='lm').x
+
+    # if input is an array
+    elif(isinstance(e,np.ndarray) or isinstance(e,list)):
+
+        if(EoS=='full'):
+            output = ['T','muB','muS','muQ']
+        elif(EoS=='muB' or EoS=='nS0'):
+            output = ['T','muB']
+        else:
+            raise Exception(f'EoS not valid: {EoS},{type(EoS)}')
+
+        solution = np.zeros((len(output),len(e))) # initialize the resulting arrray
+
+        for i,_ in enumerate(e):
+            if(EoS=='full'):
+                result = find_param(EoS,e=e[i],n_B=nB[i],n_Q=nQ[i],n_S=nS[i])
+            elif(EoS=='muB' or EoS=='nS0'):
+                result = find_param(EoS,e=e[i],n_B=nB[i])
+            for iq, quant in enumerate(output):
+                solution[iq,i] = result[quant]
+    else:
+        raise Exception('Problem with input')
+
     return dict(zip(output,solution))

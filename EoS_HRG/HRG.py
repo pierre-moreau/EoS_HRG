@@ -408,7 +408,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
         e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
     
     # if the temperature input is a list
-    elif(isinstance(xT,np.ndarray)):
+    elif(isinstance(xT,np.ndarray) or isinstance(e,list)):
         p = np.zeros_like(xT)
         s = np.zeros_like(xT)
         nB = np.zeros_like(xT)
@@ -423,5 +423,8 @@ def HRG(xT,muB,muQ,muS,**kwargs):
             nQ[i] = result['n_Q']
             nS[i] = result['n_S']
             e[i] = result['e']
+
+    else:
+        raise Exception('Problem with input')
     
     return {'T': xT,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
