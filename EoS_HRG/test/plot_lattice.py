@@ -101,8 +101,7 @@ def plot_lattice_all(EoS,muB):
     return f,ax
 
 ###############################################################################
-__doc__ = """
-Produce plots to compare lQCD data width their parametrization from EoS_HRG.fit_lattice
+__doc__ = """Produce plots to compare lQCD data width their parametrization from EoS_HRG.fit_lattice
 as a function of T and muB for two different settings:
     - 'muB' refers to the EoS with the condition \mu_Q = \mu_S = 0
     - 'nS0' refers to the EoS with the condition <n_S> = 0 & <n_Q> = 0.4 <n_B>
@@ -115,7 +114,7 @@ def main(EoS,tab):
 
     parser = argparse.ArgumentParser(
         description=__doc__,
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
         '--Tmin', type=float, default=lQCDdata0.min(),

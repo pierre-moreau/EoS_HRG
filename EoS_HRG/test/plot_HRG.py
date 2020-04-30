@@ -15,8 +15,7 @@ from EoS_HRG.fit_lattice import lattice_data, Tc_lattice, EoS_nS0
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 ###############################################################################
-__doc__ = """
-Produce plots for the HRG EoS defined in EoS_HRG.HRG 
+__doc__ = """Produce plots for the HRG EoS defined in EoS_HRG.HRG 
 and compare with lQCD data from EoS_HRG.fit_lattice for two different settings:
     - 'muB' refers to the EoS with the condition \mu_Q = \mu_S = 0
     - 'nS0' refers to the EoS with the condition <n_S> = 0 & <n_Q> = 0.4 <n_B>
@@ -27,7 +26,7 @@ def main(EoS,tab):
 
     parser = argparse.ArgumentParser(
         description=__doc__,
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
         '--Tmin', type=float, default=.1,

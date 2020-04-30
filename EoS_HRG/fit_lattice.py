@@ -5,6 +5,7 @@ import scipy.optimize
 import scipy.misc
 import os
 import re
+import argparse
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF,ConstantKernel
 # for tests
@@ -12,6 +13,33 @@ from sklearn.gaussian_process.kernels import RBF,ConstantKernel
 
 # directory where the fit_lattice_test.py is located
 dir_path = os.path.dirname(os.path.realpath(__file__))
+
+########################################################################
+if __name__ == "__main__": 
+    __doc__="""Construct a parametrization (from PhysRevC.100.064910) of the lattice QCD equation of state 
+(P/T^4, n/T^3, s/T^3, e/T^4) by calling function:
+- param(T,muB,muQ,muS)
+  input: temperature and chemical potentials in [GeV]
+  output: dictionnary of all quantities ['T','P','s','n_B','n_Q','n_S','e']
+
+Produces lattice data for P/T^4, nB/T^3, s/T^3, e/T^4 as a function of T for a single value of muB:
+- lattice_data(EoS,muB)
+  input: - EoS: - 'muB' refers to the EoS with the condition \mu_Q = \mu_S = 0
+                - 'nS0' refers to the EoS with the condition <n_S> = 0 & <n_Q> = 0.4 <n_B>
+         - muB: baryon chemical potential in [GeV]
+  output: dictionnary of all quantities + error ['T','P','s','n_B','e']
+
+Calculation of the equation of state under the conditions: <n_S> = 0 ; <n_Q> = factQB*<n_B>:
+- EoS_nS0(fun,T,muB,**kwargs)
+  input: - fun: any function which calculate an EoS (by ex: param, HRG, full_EoS)
+         - T,muB: temperature and baryon chemical potential in [GeV]
+  output: dictionnary of all quantities ['T','P','s','n_B','e']
+"""
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    args = parser.parse_args()
 
 ###############################################################################
 # import data from lattice at muB = 0
