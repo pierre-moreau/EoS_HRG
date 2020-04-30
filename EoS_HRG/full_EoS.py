@@ -1,9 +1,39 @@
 import numpy as np
 import os
+import argparse
 import scipy.optimize
 
 from EoS_HRG.HRG import HRG
 from EoS_HRG.fit_lattice import Tc_lattice, param, dTcdmuB_lattice, EoS_nS0
+
+########################################################################
+if __name__ == "__main__": 
+    __doc__="""Construct the EoS (P/T^4, n/T^3, s/T^3, e/T^4) 
+resulting from a matching between the lattice QCD EoS
+from EoS_HRG.fit_lattice and the HRG EoS from EoS_HRG.HRG:
+- full_EoS(T,muB,muQ,muS,**kwargs)
+  input: temperature and chemical potentials in [GeV]
+  kwargs: - species = all, mesons, baryons -> which particles to include in the HRG?
+          - offshell = True, False -> integration over mass for unstable particles in the HRG?
+  output: dictionnary of all quantities ['T','P','s','n_B','n_Q','n_S','e']
+
+From function full_EoS, find [T,muB,muQ,muS] from thermodynamic quantities:
+- find_param(EoS,**kwargs)
+  EoS: - 'full': find T,muB,muQ,muS from e,n_B,n_Q,n_S
+       - 'muB': find T,muB from e,n_B with the condition \mu_Q = \mu_S = 0
+       - 'nS0': find T,muB from e,n_B with the condition <n_S> = 0 & <n_Q> = 0.4 <n_B>
+  kwargs: - e: energy density in GeV.fm^-3
+          - n_B: baryon density in fm^-3 
+          - n_Q: baryon density in fm^-3 
+          - n_S: baryon density in fm^-3 
+  output: dictionnary of quantities in [GeV]: ['T','muB','muQ','muS'] for EoS='full'
+          and ['T','muB'] for EoS='muB' or 'nS0'
+"""
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    args = parser.parse_args()
 
 ########################################################################
 def full_EoS(xT,muB,muQ,muS,**kwargs):

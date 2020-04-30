@@ -5,12 +5,28 @@ from particle import Particle
 import re
 import math
 import os
+import argparse
 
 # define Pi variable
 Pi = math.pi
 
 # directory where the fit_lattice_test.py is located
 dir_path = os.path.dirname(os.path.realpath(__file__))
+
+########################################################################
+if __name__ == "__main__": 
+    __doc__="""Construct the HRG equation of state (P/T^4, n/T^3, s/T^3, e/T^4) by calling function:
+- HRG(T,muB,muQ,muS,**kwargs)
+  input: temperature and chemical potentials in [GeV]
+  kwargs: - species = all, mesons, baryons -> which particles to include in the HRG?
+          - offshell = True, False -> integration over mass for unstable particles in the HRG?
+  output: dictionnary of all quantities ['T','P','s','n_B','n_Q','n_S','e']
+"""
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    args = parser.parse_args()
 
 ########################################################################
 class parton:

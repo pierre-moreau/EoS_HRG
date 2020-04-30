@@ -16,8 +16,7 @@ from EoS_HRG.fit_lattice import lattice_data, Tc_lattice
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 ###############################################################################
-__doc__ = """ 
-Produce plots for the HRG+lQCD EoS defined in EoS_HRG.full_EoS:
+__doc__ = """Produce plots for the HRG+lQCD EoS defined in EoS_HRG.full_EoS:
     - EoS as a function of T and muB in comparison with lQCD data from EoS_HRG.fit_lattice
     - isentropic trajectories at fixed values of s/n_B
 for two different settings:
@@ -32,7 +31,7 @@ def main(EoS,tab):
 
     parser = argparse.ArgumentParser(
         description=__doc__,
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
         '--Tmin', type=float, default=lQCDdata0['T'].min(),
