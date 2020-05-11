@@ -3,11 +3,12 @@ import matplotlib.pyplot as pl
 import scipy
 import os
 import argparse
+from tqdm import trange
 
 # import from __init__.py
 from . import *
 # import functions to evaluate
-from EoS_HRG.full_EoS import full_EoS, full_EoS_nS0, find_param
+from EoS_HRG.full_EoS import full_EoS, full_EoS_nS0, find_param, isentropic
 # for the plots, import plots of lQCD data
 from EoS_HRG.test.plot_lattice import plot_lattice
 from EoS_HRG.fit_lattice import lattice_data, Tc_lattice
@@ -100,7 +101,7 @@ def main(EoS,tab):
 
 ########################################################################
 @timef
-def isentropic(EoS,tab):
+def plot_isentropic(EoS,tab):
     """
     Calculate isentropic trajectories and export the
     corresponding plot in the T-\mu_B plane
@@ -117,38 +118,10 @@ def isentropic(EoS,tab):
     for muBoT in range(1,5):
         ax.plot(np.linspace(0.0,0.6,10),np.linspace(0.0,0.6,10)/muBoT, '--', color='grey', linewidth='1', alpha=0.5)
 
-    if(EoS!='nS0'):
-        fEoS = lambda xT,xmuB : full_EoS(xT,xmuB,0.,0.)
-    else:
-        fEoS = lambda xT,xmuB : full_EoS_nS0(xT,xmuB)
-
-    def system(muB,xT,snB):
-        """
-        Define the system to be solved
-        <s> = fact*<n_B> 
-        """
-        thermo = fEoS(xT,muB)
-        return thermo['s']-snB*thermo['n_B']
-
-    # initialize values of T
-    xtemp = np.linspace(0.5,0.2,8)
-    xtemp = np.append(xtemp,np.linspace(0.18,0.1,12))
-    xtemp = np.append(xtemp,np.linspace(0.09,0.01,10))
-
     for snB,color in tab:
         print('    s/n_B = ', snB)
         # initialize values of \mu_B
-        xmuB = np.zeros_like(xtemp)
-        for iT,xT in enumerate(xtemp):
-            valmuB = np.array(list([imuB*0.01 for imuB in range(100)]))
-            fval = np.zeros_like(valmuB)
-            for imuB,xxmuB in enumerate(valmuB):
-                fval[imuB] = system(xxmuB,xT,snB)
-            
-            try:
-                xmuB[iT] = scipy.optimize.brentq(system,a=0.0001,b=0.7,args=(xT,snB),rtol=0.01)
-            except:
-                xmuB[iT] = None
+        xmuB,xtemp = isentropic(EoS,snB)
         
         # plot the isentropic trajectories
         ax.plot(xmuB,xtemp, color=color, linewidth='2.5', label=r'$ s/n_B = $'+str(snB))
@@ -185,9 +158,7 @@ def test_find(EoS):
         fun = lambda T,muB,mQ,muS : full_EoS_nS0(T,muB)
 
     xtrue = np.zeros(Nunk) # record when a certain accuracy is achieved
-    for itest in range(100):
-        if((itest+1)%20 == 0):
-            print('    ',itest+1,'%')
+    for itest in trange(100):
 
         # first randomly pick T,muB,muQ,muS
         T = np.random.uniform(0.05,0.8)
@@ -233,9 +204,9 @@ if __name__ == "__main__":
 
     # values of s/n_B to test the lQCD+HRG EoS (takes a long time)
     tab = [[420,'r'],[144,'tab:purple'],[94,'m'],[70,'tab:orange'],[51,'tab:olive'],[30,'g']]
-    isentropic('muB',tab)
-    isentropic('nS0',tab)
-
+    plot_isentropic('muB',tab)
+    plot_isentropic('nS0',tab)
+    
     # test the accuracy of the find_param function in EoS_HRG.full_EoS
     test_find('full')
     test_find('muB')

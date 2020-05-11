@@ -198,3 +198,36 @@ def find_param(EoS,**kwargs):
         raise Exception('Problem with input')
 
     return dict(zip(output,solution))
+
+def isentropic(EoS,snB):
+    """
+    Calculate isentropic trajectories
+    """
+    if(EoS=='muB'):
+        fEoS = lambda xT,xmuB : full_EoS(xT,xmuB,0.,0.)
+    elif(EoS=='nS0'):
+        fEoS = lambda xT,xmuB : full_EoS_nS0(xT,xmuB)
+
+    def system(muB,xT):
+        """
+        Define the system to be solved
+        <s> = fact*<n_B> 
+        """
+        thermo = fEoS(xT,muB)
+        return thermo['s']-snB*thermo['n_B']
+
+    # initialize values of T
+    xtemp = np.linspace(0.5,0.2,8)
+    xtemp = np.append(xtemp,np.linspace(0.18,0.1,12))
+    xtemp = np.append(xtemp,np.linspace(0.09,0.01,10))
+
+    # now calculate values of muB along isentropic trajectories
+    # loop over T
+    xmuB = np.zeros_like(xtemp)
+    for iT,xT in enumerate(xtemp):            
+        try:
+            xmuB[iT] = scipy.optimize.brentq(system,a=0.0001,b=0.7,args=(xT),rtol=0.01)
+        except:
+            xmuB[iT] = None
+    
+    return xmuB,xtemp
