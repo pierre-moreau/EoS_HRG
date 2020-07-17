@@ -333,6 +333,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
     if(isinstance(xT,float)):
         T = xT
         p = 0.
+        ndens = 0.
         nB = 0.
         nQ = 0.
         nS = 0.
@@ -424,6 +425,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
             
             # dimensioneless quantities
             p += resultp/T**4.
+            ndens += resultn/T**3.
             nB += Bcharge(part)*resultn/T**3.   
             nQ += Qcharge(part)*resultn/T**3.  
             nS += Scharge(part)*resultn/T**3.  
@@ -435,6 +437,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
     elif(isinstance(xT,np.ndarray) or isinstance(xT,list)):
         p = np.zeros_like(xT)
         s = np.zeros_like(xT)
+        ndens = np.zeros_like(xT)
         nB = np.zeros_like(xT)
         nQ = np.zeros_like(xT)
         nS = np.zeros_like(xT)
@@ -456,6 +459,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
             result = HRG(T,valmuB,valmuQ,valmuS,**kwargs)
             p[i] = result['P']
             s[i] = result['s']
+            ndens[i] = result['n']
             nB[i] = result['n_B']
             nQ[i] = result['n_Q']
             nS[i] = result['n_S']
@@ -464,4 +468,4 @@ def HRG(xT,muB,muQ,muS,**kwargs):
     else:
         raise Exception('Problem with input')
     
-    return {'T': xT,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
+    return {'T': xT,'P':p, 's':s, 'n':ndens, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
