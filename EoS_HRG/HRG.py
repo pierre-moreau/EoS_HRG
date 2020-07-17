@@ -338,12 +338,17 @@ def HRG(xT,muB,muQ,muS,**kwargs):
         nS = 0.
         s = 0.
         e = 0.
+        flag_1part = False
         if(species=='all'):
             list_part = HRG_mesons + HRG_baryons
         elif(species=='mesons'):
             list_part = HRG_mesons
         elif(species=='baryons'):
             list_part = HRG_baryons
+        else:
+            # if just one particle name is specified
+            list_part = [to_particle(species)]
+            flag_1part = True
         
         for part in list_part:
             resultp = 0.
@@ -352,6 +357,9 @@ def HRG(xT,muB,muQ,muS,**kwargs):
 
             # to account for baryon/antibaryon and meson/antimesons
             antip = float(has_anti(part))
+            # if just one particle selected, don't count antiparticle contribution
+            if(flag_1part):
+                antip = 0
 
             xmass = mass(part) # pole mass of the particle
             maxk = 3 # max value of k for sum over k
@@ -424,7 +432,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
         e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
     
     # if the temperature input is a list
-    elif(isinstance(xT,np.ndarray) or isinstance(e,list)):
+    elif(isinstance(xT,np.ndarray) or isinstance(xT,list)):
         p = np.zeros_like(xT)
         s = np.zeros_like(xT)
         nB = np.zeros_like(xT)
@@ -432,7 +440,20 @@ def HRG(xT,muB,muQ,muS,**kwargs):
         nS = np.zeros_like(xT)
         e = np.zeros_like(xT)
         for i,T in enumerate(xT):
-            result = HRG(T,muB,muQ,muS,**kwargs)
+            # see if arrays are also given for chemical potentials
+            try:
+                valmuB = muB[i]
+            except:
+                valmuB = muB
+            try:
+                valmuQ = muQ[i]
+            except:
+                valmuQ = muQ
+            try:
+                valmuS = muS[i]
+            except:
+                valmuS = muS
+            result = HRG(T,valmuB,valmuQ,valmuS,**kwargs)
             p[i] = result['P']
             s[i] = result['s']
             nB[i] = result['n_B']
