@@ -1,11 +1,12 @@
 import numpy as np
 import scipy.integrate as integrate
 from scipy.special import kn
-from particle import Particle
 import re
 import math
 import os
 import argparse
+# import from __init__.py
+from . import *
 
 # define Pi variable
 Pi = math.pi
@@ -49,44 +50,6 @@ dbar = parton("D",-2,-1./3.,1./3.,-0.)
 sbar = parton("S",-3,-1./3.,1./3.,1.)
 g = parton("g",10,0.,0.,0.)
 list_partons = [u,d,s,ubar,dbar,sbar,g]
-
-########################################################################
-def to_particle(list_name):
-    """
-    Convert a list of particle names to a list of particle objects
-    """
-    if not(isinstance(list_name, list)):
-        list_part = Particle.find(lambda p: p.name==list_name)
-    else:
-        list_part = [None]*len(list_name)
-        for i,part in enumerate(list_name):
-            list_part[i] = to_particle(part)
-    return list_part
-
-########################################################################
-def to_antiparticle(list_part):
-    """
-    Convert a list of particle object to a list of their corresponding antiparticle
-    """
-    if not(isinstance(list_part, list)):
-        list_anti = Particle.from_pdgid(-list_part.pdgid)
-    else:
-        list_anti = [None]*len(list_part)
-        for i,part in enumerate(list_part):
-            list_anti[i] = to_antiparticle(part)
-    return list_anti
-
-########################################################################
-def has_anti(part):
-    """
-    Return True or False depending if the particle has an antiparticle or not
-    """
-    try:
-        Particle.from_pdgid(-part.pdgid)
-        result = True
-    except:
-        result = False
-    return result
 
 ########################################################################
 def from_name_to_parton(name_parton):
@@ -219,52 +182,50 @@ with open(dir_path+'/baryons_HRG.dat', 'r') as f:
 # Define threshold for decays of unstable mesons and baryons
 ########################################################################
 
-def threshold(mth_dict,part_name,*args):
+def threshold(list_part):
     """
     Average threshold energy for the particle
     sum of decay products weighted by the corresponding branching ratios (branch)
-    input is: particle, [branch1, part11, part12, ....], [branch2, part21, part22,...]
     """
-    # calculate threshold energy as an average of
-    # sum_n %_n*(part_n1 + part_n2 + part_n3 ...)
-    # with n being decay channel number n with branching %n
-    # and part_n are the particle resulting from the decay
-    thres = 0.
-    for dec in args:
-        m_decay = np.array([mass(to_particle(part_name)) for part_name in dec[1:len(dec)]])
-        thres += dec[0]/100.*sum(m_decay)
-    return mth_dict.update({part_name: thres})
+    # calculate threshold energy as an average:
+    # sum_n br_n*(mass_n1 + mass_n2 + mass_n3 ...)
+    # with n being decay channel number n with branching br_n
+    # and mass_n are the particle resulting from the decay
+    mth_dict = {}
+    for hadron in list_part:
+        # initialize average threshold mass
+        thres = 0.
+        # see if this particle has decay info
+        list_decays = part_decay(hadron)
+
+        if(list_decays!=None):
+            # loop over decay channels
+            for decay in list_decays:
+                # branching
+                br = decay[0]
+                children = decay[1]
+                # sum mass of child particles
+                thres += br*sum([mass(child) for child in children])
+        
+            mth_dict.update({hadron.name: thres})
+
+    return mth_dict
 
 ########################################################################
 # Define decay particles of unstable particles and their branching ratio
 # add entry to the dictionnary by calling function threshold
 # (dict, particle, [fraction in %,decay products])
 ########################################################################
-mth_mesons = {}
-threshold(mth_mesons,"eta'(958)",[42.9,"pi+","pi-","eta"],[29.1,"rho(770)0"],[22.2,"pi0","pi0","eta"],[2.75,"omega(782)"])
-threshold(mth_mesons,"rho(770)+", [100, "pi+","pi0"])
-threshold(mth_mesons,"rho(770)0", [100, "pi0","pi0"])
-threshold(mth_mesons,"omega(782)", [89.2,"pi+","pi-","pi0"], [8.28,"pi0"], [1.53,"pi+","pi-"])
-threshold(mth_mesons,"phi(1020)", [48.9,"K+","K-"], [34.2,"K0","K0"], [15.32,"rho(770)+","pi-","pi+","pi-","pi0"])
-threshold(mth_mesons,"K*(892)+", [100,"K+","pi0"])
-threshold(mth_mesons,"K*(892)0", [100,"K0","pi0"])
-threshold(mth_mesons,"a(1)(1260)+", [100,"rho(770)+","pi0"])
-threshold(mth_mesons,"a(1)(1260)0", [100,"rho(770)0","pi0"])
 
-mth_baryons = {}
-threshold(mth_baryons,"N(1440)+", [65,"p","pi0"], [35,"p","pi0","pi0"])
-threshold(mth_baryons,"N(1440)0", [65,"n","pi0"], [35,"n","pi0","pi0"])
-threshold(mth_baryons,"N(1535)+", [45,"p","pi0"], [42,"p","eta"], [5,"p","pi0","pi0"])
-threshold(mth_baryons,"N(1535)0", [45,"n","pi0"], [42,"n","eta"], [5,"n","pi0","pi0"])
-threshold(mth_baryons,"Delta(1232)++", [100,"p","pi+"])
-threshold(mth_baryons,"Delta(1232)+", [100,"p","pi0"])
-threshold(mth_baryons,"Delta(1232)0", [100,"n","pi0"])
-threshold(mth_baryons,"Delta(1232)-", [100,"n","pi-"])
-threshold(mth_baryons,"Sigma(1385)+", [87,"Lambda","pi+"], [11.7,"Sigma+","pi0"])
-threshold(mth_baryons,"Sigma(1385)0", [87,"Lambda","pi0"], [11.7,"Sigma0","pi0"])
-threshold(mth_baryons,"Sigma(1385)-", [87,"Lambda","pi-"], [11.7,"Sigma-","pi0"])
-threshold(mth_baryons,"Xi(1530)0", [100,"Xi0","pi0"])
-threshold(mth_baryons,"Xi(1530)-", [100,"Xi-","pi0"])
+# calculate threshold energy as an average:
+# sum_n br_n*(mass_n1 + mass_n2 + mass_n3 ...)
+# with n being decay channel number n with branching br_n
+# and mass_n are the particle resulting from the decay
+
+mth_mesons = threshold(HRG_mesons)
+mth_baryons = threshold(HRG_baryons)
+#print(mth_mesons)
+#print(mth_baryons)
 
 mth_all = mth_mesons
 mth_all.update(mth_baryons)
@@ -429,7 +390,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
             nB += Bcharge(part)*resultn/T**3.   
             nQ += Qcharge(part)*resultn/T**3.  
             nS += Scharge(part)*resultn/T**3.  
-            s += results/T**3.
+            s += results/T**3.     
         
         e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
     

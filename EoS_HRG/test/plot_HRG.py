@@ -5,6 +5,7 @@ import argparse
 
 # import from __init__.py
 from . import *
+from .. import *
 # import the functions to test from HRG.py
 from EoS_HRG.HRG import HRG
 # to plot
@@ -139,9 +140,9 @@ def plot_species(EoS,muB):
         ax[ipl].plot(xtemp,yval[quant], linewidth='2.5', color='k', label='all particles')
         ax[ipl].legend(title='PHSD HRG', title_fontsize='20', loc='best', borderaxespad=0., frameon=False)
 
-    list_part = [['pi+',r'$\pi^+$'],['pi-',r'$\pi^-$'],['K+',r'$K^+$'],['K-',r'$K^-$'],['p',r'$p$'],['n',r'$n$'],['p~',r'$\bar{p}$'],['n~',r'$\bar{n}$']]
+    list_part = ['pi+','pi-','K+','K-','p','n','p~','n~']
     line = '-'
-    for part,part_latex in list_part:
+    for part in list_part:
         print('    particle = ', part)
 
         if(EoS!='nS0'):
@@ -151,7 +152,7 @@ def plot_species(EoS,muB):
             yval = HRG(xtemp,muB,list_muQ,list_muS,species=part,offshell=args.offshell)
 
         for ipl,quant in enumerate(list_quant):
-            ax[ipl].plot(xtemp,yval[quant], line, linewidth='2.5', label=part_latex)
+            ax[ipl].plot(xtemp,yval[quant], line, linewidth='2.5', label=r'$'+latex(part)+'$')
             ax[ipl].legend(title='PHSD HRG', title_fontsize='20', loc='best', borderaxespad=0., frameon=False)
 
         if(line=='-'):
@@ -181,7 +182,7 @@ if __name__ == "__main__":
 
     main('muB',tab)
     main('nS0',tab)
-
+    
     plot_species('muB',0)
     plot_species('muB',0.4)
     plot_species('nS0',0)
