@@ -359,6 +359,7 @@ def EoS_nS0(fun,xT,muB,**kwargs):
         nB = 0.
         s = 0.
         e = 0.
+        n = 0.
         
         def system(mu):
             """
@@ -378,11 +379,16 @@ def EoS_nS0(fun,xT,muB,**kwargs):
         s = result['s']
         nB = result['n_B']
         e = result['e'] 
+        try:
+            n = result['n']
+        except:
+            pass
         
     elif(isinstance(xT,np.ndarray) or isinstance(e,list)):
         p = np.zeros_like(xT)
         s = np.zeros_like(xT)
         nB = np.zeros_like(xT)
+        n = np.zeros_like(xT)
         e = np.zeros_like(xT)
         muQ = np.zeros_like(xT)
         muS = np.zeros_like(xT)
@@ -391,6 +397,7 @@ def EoS_nS0(fun,xT,muB,**kwargs):
             p[i] = result['P']
             s[i] = result['s']
             nB[i] = result['n_B']
+            n[i] = result['n']
             e[i] = result['e']
             muQ[i] = result['muQ']
             muS[i] = result['muS']
@@ -398,4 +405,4 @@ def EoS_nS0(fun,xT,muB,**kwargs):
     else:
         raise Exception('Problem with input')
     
-    return {'T':xT, 'muQ': muQ, 'muS': muS, 'P':p, 's':s, 'n_B':nB, 'e':e} 
+    return {'T':xT, 'muQ': muQ, 'muS': muS, 'P':p, 's':s, 'n_B':nB, 'n':n, 'e':e} 

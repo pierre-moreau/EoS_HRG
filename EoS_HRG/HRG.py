@@ -126,21 +126,6 @@ def d_spin(particle):
     return 2*J+1
 
 ########################################################################
-def mass(particle):
-    """
-    mass of a particle object, in GeV
-    """
-    return particle.mass/1000. # convert particle mass in GeV
-
-def width(particle):
-    """
-    width of a particle object, in GeV
-    """
-    # for K0, K~0, return width=0
-    if(particle.width==None):
-        return 0.
-    return abs(particle.width)/1000. # convert particle width in GeV
-
 def BW(m,M0,gamma):
     """
     Breit-Wigner spectral function
@@ -284,6 +269,12 @@ def HRG(xT,muB,muQ,muS,**kwargs):
         offshell = kwargs['offshell']
     except:
         offshell = False # default
+
+    # strangeness suppression factor?
+    try:
+        gammaS = kwargs['gammaS']
+    except:
+        gammaS = 1 # default no suppression
         
     # which particles to consider in the HRG EoS?
     try:
@@ -333,7 +324,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
             elif(xmass/T>3.):
                 maxk = 2
 
-            xmu = muk(part,muB,muQ,muS) # chemical potential of the particle           
+            xmu = muk(part,muB,muQ,muS) + np.log(gammaS**(abs(Scharge(part)))) # chemical potential of the particle           
             xwidth = width(part) # width of the particle
             dg = d_spin(part) # degeneracy factor of the particle
 

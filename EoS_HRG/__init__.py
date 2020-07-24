@@ -51,22 +51,58 @@ def has_anti(part):
         return False
 
 ########################################################################
-def to_antiparticle(part):
+def to_antiparticle(part,same=False):
     """
     Convert a list of particle object to a list of their corresponding antiparticle
     """
     if not(isinstance(part, list)):
+        # if particle has an antiparticle, return particle object
         if(has_anti(part)):
             output_anti = Particle.from_pdgid(-part.pdgid)
             return output_anti
-        else:
-            return None
+        # if antiparticle doesn't exist, return same particle
+        # if flag same is set to true
+        elif(same==True):
+            return part
     else:
         output_anti = [None]*len(part)
         for i,ipart in enumerate(part):
             output_anti[i] = to_antiparticle(ipart)
 
         return list(filter(None, output_anti)) 
+
+########################################################################
+def mass(particle):
+    """
+    mass of a particle object, in GeV
+    """
+    return particle.mass/1000. # convert particle mass in GeV
+
+def width(particle):
+    """
+    width of a particle object, in GeV
+    """
+    # for K0, K~0, return width=0
+    if(particle.width==None):
+        return 0.
+    return abs(particle.width)/1000. # convert particle width in GeV
+
+def tau(particle):
+    """
+    lifetime of a particle object, in fm/c
+    """
+    part_width = width(particle)
+    if(part_width>0.):
+        return 0.1973269804/part_width
+    else:
+        return float('inf')
+
+def ctau(particle):
+    """
+    ctau of the particle in meters
+    """
+    lifetime = tau(particle) # in fm/c
+    return lifetime*10.**(-15.) # now in meters with c=1
 
 ########################################################################
 def latex(part_name):
@@ -142,8 +178,15 @@ def part_decay(part):
     # get evt gen name to search for the decay
     try:
         list_decays = decays[part.evtgen_name]
+        antip = False
+    # if not found, transform particle decay info from particle to antiparticle
     except:
-        return None
+        try:
+            anti_part = to_antiparticle(part)
+            list_decays = decays[anti_part.evtgen_name]
+            antip = True
+        except:
+            return None
 
     # construct final decay list
     final_decays = []
@@ -152,13 +195,13 @@ def part_decay(part):
         children = decay[1] # child particles
 
         # convert evt gen names to particle objects
-        final_decays.append((br,(Particle.find(evtgen_name=child) for child in children)))
-
+        final_decays.append((br,(to_antiparticle(Particle.find(evtgen_name=child),same=True) if antip else Particle.find(evtgen_name=child) for child in children)))
     return final_decays
 
 ########################################################################
 def print_decays(part):
     decays = part_decay(part)
+    print(f'\n{part.name}: width {width(part)} [GeV]; tau {tau(part)} [fm/c]; ctau {ctau(part)} [m]')
     if(decays!=None):
         for idecay,decay in enumerate(decays):
             br = decay[0]
