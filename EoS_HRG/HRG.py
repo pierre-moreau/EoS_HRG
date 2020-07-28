@@ -5,6 +5,8 @@ import re
 import math
 import os
 import argparse
+from iminuit import Minuit
+from iminuit.cost import LeastSquares
 # import from __init__.py
 from . import *
 
@@ -421,3 +423,351 @@ def HRG(xT,muB,muQ,muS,**kwargs):
         raise Exception('Problem with input')
     
     return {'T': xT,'P':p, 's':s, 'n':ndens, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
+
+########################################################################
+def HRG_freezout(T,muB,muQ,muS,gammaS,**kwargs):
+    """
+    Calculate all particle number densities from HRG
+    Includes decays as well.
+    """
+
+    # list of particles to consider
+    list_particles = HRG_mesons + HRG_baryons + to_antiparticle(HRG_mesons) + to_antiparticle(HRG_baryons)
+    # particles are listed from the heaviest to the lightest
+    # that's for the decays
+    list_particles.sort(reverse=True,key=lambda part: mass(part))
+
+    # for tests only
+    #for part in list_particles:
+    #    print_decays(part)
+    #input('pause')
+
+    # consider integration over mass?
+    try:
+        offshell = kwargs['offshell']
+    except:
+        offshell = False # default
+
+    # which particles are corrected for feed-down weak decays?
+    try:
+        no_feeddown = kwargs['no_feeddown']
+        # if all particles are corrected for feed-down weak decays
+        if(no_feeddown=='all'):
+            no_feeddown = [part.name for part in list_particles]
+    except:
+        # default (like BES data, pions and lambda are corrected, protons are inclusive)
+        no_feeddown = ['pi+','pi-','Lambda','Lambda~']#,'p','p~']
+
+    # consider decay from unstable particles in the calculation of densities?
+    try:
+        freezeout_decay = kwargs['freezeout_decay']
+        # in PHSD, the eta and strange baryons haven't decayed in the final output
+        if(freezeout_decay=='PHSD'):
+            # stable particles
+            stables = ['eta']
+            freezeout_decay = True
+            # all particles should be corrected for feed-down weak decays
+            no_feeddown = [part.name for part in list_particles]
+    except:
+        freezeout_decay = True # default
+        stables = [] # all particles decay
+
+    # initial densities of particles
+    init_dens = {}
+    # dictionnary containing the densities from weak decays
+    feeddown_dens = {}
+    # dictionnary containing final densities (incuding possible decays) from HRG
+    final_dens = {}
+    # fill dictionnaries with densities
+    for part in list_particles:
+        part_dens = HRG(T,muB,muQ,muS,gammaS=gammaS,offshell=offshell,species=part.name)['n']
+        init_dens[part.name] = part_dens
+        feeddown_dens[part.name] = 0.
+        final_dens[part.name] = part_dens
+
+    # particles which contribute to feed-down weak decays
+    weak_decays = ['K0','Lambda','Sigma+','Sigma-','Xi-','Xi0','Omega-']
+    # add their corresponding antiparticles
+    weak_decays += [to_antiparticle(to_particle(part)).name for part in weak_decays]
+
+    # decay of unstable particles, which can be added to the density
+    # loop over all the considered particles
+    if(freezeout_decay):
+        for parent in list_particles:
+            # see if this particle can decay
+            list_decays = part_decay(parent)
+            #print_decays(parent)
+            # if a particle is considered stable, skip
+            if(parent.name in stables):
+                continue
+            # half of the K0 & K~0 go to K(S)0
+            if(parent.name=='K0' or parent.name=='K~0'):
+                list_decays = part_decay(to_particle('K(S)0'))
+                # half of the K0 & K~0 go to K(S)0
+                # so divide the K(S)0 branchings by 2
+                fact_br = 0.5
+            else:
+                fact_br = 1.
+                #print_decays(to_particle('K(S)0'))
+            # loop over decay channels if not None
+            if(list_decays!=None):
+                for decay in list_decays:
+                    br = fact_br*decay[0] # branching
+                    children = decay[1]
+                    # loop over child particles
+                    for child in children:
+                        # try if child particle is in dictionnary
+                        try:
+                            final_dens[child.name] += br*final_dens[parent.name]
+                            # count feed-down weak decays for this particle
+                            if(parent.name in weak_decays):
+                                feeddown_dens[child.name] += br*final_dens[parent.name]
+                        except:
+                            pass
+
+    # correct (substract) densities from weak decays for particles in list no_feeddown
+    for part in no_feeddown:
+        final_dens[part] -= feeddown_dens[part]
+
+    # output to compare final and initial densities
+    #for part in list_particles:
+    #    print(part.name,init_dens[part.name],final_dens[part.name],'from decays [%]:',(final_dens[part.name]-init_dens[part.name])*100./final_dens[part.name])
+    #input('pause')
+
+    return final_dens
+
+########################################################################
+def fit_freezeout(dict_yield,**kwargs):
+    """
+    Extract freeze out parameters by fitting final heavy ion data (dN/dy)
+    given in dict_yield. Construct ratios of different particles.
+    """
+    # additional plots of chi^2 (takes time)
+    try:
+        chi2_plot = kwargs['chi2_plot']
+    except:
+        chi2_plot = False # default
+
+    # consider decay from unstable particles in the calculation of densities?
+    try:
+        freezeout_decay = kwargs['freezeout_decay']
+    except:
+        freezeout_decay = True
+
+    # apply fit to both yields and ratios?
+    try:
+        method = kwargs['method']
+    except:
+        method = 'all'
+
+    # we fit the HRG EoS to the ratios of particle yields as list_part1/list_part2
+    # as in BES STAR paper: PHYSICAL REVIEW C 96, 044904 (2017)
+    list_part1 = ['pi-','K-','p~','Lambda~','Xi~+','K-','p~','Lambda','Xi~+']
+    list_part2 = ['pi+','K+','p','Lambda','Xi-','pi-','pi-','pi-','pi-']
+
+    # unique list of particles (for the yields)
+    list_part = ['pi+','pi-','K+','K-','p','p~','Lambda','Lambda~','Xi-','Xi~+']
+
+    # construct yields from input
+    data_yields = []
+    err_yields = []
+    final_part = []
+    for part in list_part:
+        try:
+            # check if the particles are given in dict_yield
+            if(dict_yield[part]!=None):
+                data_yields.append(dict_yield[part])
+                err_yields.append(dict_yield[part+'_err'])
+                final_part.append(part)
+        except:
+            pass
+
+    # construct ratios from input yields
+    data_ratios = []
+    err_ratios = []
+    final_part1 = []
+    final_part2 = []
+    # loop over particles in list_part1 and list_part2
+    for part1,part2 in zip(list_part1,list_part2):
+        try:
+            # check if the particles are given in dict_yield
+            if(dict_yield[part1]!=None and dict_yield[part2]!=None):
+                ratio = dict_yield[part1]/dict_yield[part2]
+                data_ratios.append(ratio)
+                err_ratios.append(abs(ratio)*np.sqrt((dict_yield[part1+'_err']/dict_yield[part1])**2.+(dict_yield[part2+'_err']/dict_yield[part2])**2.))
+                final_part1.append(part1)
+                final_part2.append(part2)
+        except:
+            pass
+
+    def f_yields(x,T,muB,muQ,muS,gammaS,dVdy):
+        """
+        Calculate the particle yields for fixed T,muB,muQ,muS,gammaS,volume
+        x is a dummy argument
+        """
+        result = np.zeros(len(final_part))
+        # calculate all densities
+        result_HRG = HRG_freezout(T,muB,muQ,muS,gammaS,**kwargs)
+        # loop over particles
+        for i,part in enumerate(final_part):
+            yval = result_HRG[part]
+            #print('part,yval=',part,yval)
+            
+            # if no decays, then Sigma0 should be added to Lambda
+            # if decays are activated, then Sigma0 decays to Lambda
+            if(not(freezeout_decay)):
+                # include Sigma0 with Lambda
+                if(part=='Lambda'):
+                    yval += result_HRG['Sigma0']
+                # include Sigma~0 with Lambda~
+                elif(part=='Lambda~'):
+                    yval += result_HRG['Sigma~0']
+                    
+            # number of particles
+            result[i] = yval*T**3.*dVdy/(0.197**3.)
+
+        # return the list of yields
+        return result
+
+    def f_ratios(x,T,muB,muQ,muS,gammaS):
+        """
+        Calculate the ratios of particle yields for fixed T,muB,muQ,muS,gammaS
+        x is a dummy argument
+        """
+        result = np.zeros(len(data_ratios))
+        # calculate all densities
+        result_HRG = HRG_freezout(T,muB,muQ,muS,gammaS,**kwargs)
+        # loop over different ratios
+        for i,(part1,part2) in enumerate(zip(final_part1,final_part2)):
+            yval1 = result_HRG[part1]
+            yval2 = result_HRG[part2]
+            #print('part,yval1=',part1,yval1)
+            #print('part,yval2=',part2,yval2)
+            
+            # if no decays, then Sigma0 should be added to Lambda
+            # if decays are activated, then Sigma0 decays to Lambda
+            if(not(freezeout_decay)):
+                # include Sigma0 with Lambda
+                if(part1=='Lambda'):
+                    yval1 += result_HRG['Sigma0']
+                # include Sigma~0 with Lambda~
+                elif(part1=='Lambda~'):
+                    yval1 += result_HRG['Sigma~0']
+                # include Sigma0 with Lambda
+                if(part2=='Lambda'):
+                    yval2 += result_HRG['Sigma0']
+                # include Sigma~0 with Lambda~
+                elif(part2=='Lambda~'):
+                    yval2 += result_HRG['Sigma~0']
+                    
+            # ratio of particle1/particle2
+            result[i] = yval1/yval2
+
+        # return the list of ratios
+        return result
+
+    # initialize the parameters
+    # which parameters to be fixed?
+    fix_T=False
+    fix_muB=False
+    fix_muQ=False
+    fix_muS=False
+    fix_gammaS=False
+    fix_dVdy=False
+    # first guesses for T,muB,muQ,muS,gammaS,dVdy
+    guess = (0.150, 0.05, 0., 0.05, 1., 2000.)
+    # bounds
+    bounds = ((0.100, 0.200), (0, 0.6), (-0.2,0.2), (0,0.2), (0.0,1.2), (100.,10000.))
+
+    # fit with yields
+    if(method=='all' or method=='yields'):
+        # x-values, just the indexes of ratios [1,2,...,N_particles]
+        xyields = np.arange(len(final_part))
+        # initialize Minuit least_squares class
+        least_squares = LeastSquares(xyields, data_yields, err_yields, f_yields)
+        m = Minuit(least_squares, T=guess[0], muB=guess[1], muQ=guess[2], muS=guess[3], gammaS=guess[4], dVdy=guess[5],
+                           limit_T=bounds[0],limit_muB=bounds[1],limit_muQ=bounds[2],limit_muS=bounds[3],limit_gammaS=bounds[4],limit_dVdy=bounds[5],
+                           fix_T=fix_T,fix_muB=fix_muB,fix_muQ=fix_muQ,fix_muS=fix_muS,fix_gammaS=fix_gammaS,fix_dVdy=fix_dVdy)
+        m.migrad() # finds minimum of least_squares function
+        m.hesse()  # computes errors
+        #print(m.params) # minuit output
+
+        # display values and errors
+        popt1 = m.values.values()
+        perr1 = m.errors.values()
+        print('\nfit from yields:')
+        fit_string1 = f'$T_{{ch}}={popt1[0]:.3f} \pm {perr1[0]:.3f}\ GeV$\
+            \n$\mu_{{B}}={popt1[1]:.3f} \pm {perr1[1]:.3f}\ GeV$\
+            \n$\mu_{{Q}}={popt1[2]:.3f} \pm {perr1[2]:.3f}\ GeV$\
+            \n$\mu_{{S}}={popt1[3]:.3f} \pm {perr1[3]:.3f}\ GeV$\
+            \n$\gamma_{{S}}={popt1[4]:.3f} \pm {perr1[4]:.3f}$\
+            \n$dV/dy={popt1[5]:.3f} \pm {perr1[5]:.3f} \ fm^3$'
+        print(fit_string1)
+
+        # evaluate the chi^2 values for each parameter
+        if(chi2_plot):
+            dT, fT = m.profile('T')
+            dmuB, fmuB = m.profile('muB')
+            dmuQ, fmuQ = m.profile('muQ')
+            dmuS, fmuS = m.profile('muS')  
+            dgammaS, fgammaS = m.profile('gammaS') 
+            ddVdy, fdVdy = m.profile('dVdy') 
+            output_chi21 = [[dT,fT],[dmuB,fmuB],[dmuQ,fmuQ],[dmuS,fmuS],[dgammaS,fgammaS],[ddVdy,fdVdy]]
+        else:
+            output_chi21 = None
+
+        output_yields = {'fit_yields':np.array(list(zip(popt1,perr1))),\
+                         'fit_string_yields':fit_string1,\
+                         'result_yields':f_yields(xyields,*popt1),\
+                         'data_yields':np.array(list(zip(data_yields,err_yields))),\
+                         'particle_yields':list(latex(final_part)),\
+                         'chi2_yields':output_chi21}
+    else:
+        output_yields = {}
+
+    # fit with ratios
+    if(method=='all' or method=='ratios'):
+        # x-values, just the indexes of ratios [1,2,...,N_ratios]
+        xratios = np.arange(len(data_ratios))
+        # initialize Minuit least_squares class
+        least_squares = LeastSquares(xratios, data_ratios, err_ratios, f_ratios)
+        m = Minuit(least_squares, T=guess[0], muB=guess[1], muQ=guess[2], muS=guess[3], gammaS=guess[4],
+                           limit_T=bounds[0],limit_muB=bounds[1],limit_muQ=bounds[2],limit_muS=bounds[3],limit_gammaS=bounds[4],
+                           fix_T=fix_T,fix_muB=fix_muB,fix_muQ=fix_muQ,fix_muS=fix_muS,fix_gammaS=fix_gammaS)
+        m.migrad() # finds minimum of least_squares function
+        m.hesse()  # computes errors
+        #print(m.params) # minuit output
+
+        # display values and errors
+        popt2 = m.values.values()
+        perr2 = m.errors.values()
+        print('\nfit from ratios:')
+        fit_string2 = f'$T_{{ch}}={popt2[0]:.3f} \pm {perr2[0]:.3f}\ GeV$\
+            \n$\mu_{{B}}={popt2[1]:.3f} \pm {perr2[1]:.3f}\ GeV$\
+            \n$\mu_{{Q}}={popt2[2]:.3f} \pm {perr2[2]:.3f}\ GeV$\
+            \n$\mu_{{S}}={popt2[3]:.3f} \pm {perr2[3]:.3f}\ GeV$\
+            \n$\gamma_{{S}}={popt2[4]:.3f} \pm {perr2[4]:.3f}$'
+        print(fit_string2)
+
+        # evaluate the chi^2 values for each parameter
+        if(chi2_plot):
+            dT, fT = m.profile('T')
+            dmuB, fmuB = m.profile('muB')
+            dmuQ, fmuQ = m.profile('muQ')
+            dmuS, fmuS = m.profile('muS')  
+            dgammaS, fgammaS = m.profile('gammaS') 
+            output_chi22 = [[dT,fT],[dmuB,fmuB],[dmuQ,fmuQ],[dmuS,fmuS],[dgammaS,fgammaS]]
+        else:
+            output_chi22 = None
+
+        output_ratios = {'fit_ratios':np.array(list(zip(popt2,perr2))),\
+                         'fit_string_ratios':fit_string2,\
+                         'result_ratios':f_ratios(xratios,*popt2),\
+                         'data_ratios':np.array(list(zip(data_ratios,err_ratios))),\
+                         'particle_ratios':list(zip(latex(final_part1),latex(final_part2))),\
+                         'chi2_ratios':output_chi22}
+    else:
+        output_ratios = {}
+
+    output_yields.update(output_ratios)
+    return output_yields
