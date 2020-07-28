@@ -217,7 +217,7 @@ def isentropic(EoS,snB):
         return thermo['s']-snB*thermo['n_B']
 
     # initialize values of T
-    xtemp = np.linspace(0.5,0.2,8)
+    xtemp = np.linspace(0.6,0.2,10)
     xtemp = np.append(xtemp,np.linspace(0.18,0.1,12))
     xtemp = np.append(xtemp,np.linspace(0.09,0.01,10))
 
@@ -226,8 +226,19 @@ def isentropic(EoS,snB):
     xmuB = np.zeros_like(xtemp)
     for iT,xT in enumerate(xtemp):            
         try:
-            xmuB[iT] = scipy.optimize.brentq(system,a=0.0001,b=0.7,args=(xT),rtol=0.01)
+            xmuB[iT] = scipy.optimize.brentq(system,a=0.0001,b=0.75,args=(xT),rtol=0.01)
         except:
             xmuB[iT] = None
-    
-    return xmuB,xtemp
+
+    # also output trajectories for mu_Q & mu_S
+    xmuQ = np.zeros_like(xtemp)
+    xmuS = np.zeros_like(xtemp)
+
+    if(EoS=='muB'):
+        return xmuB,xtemp,xmuQ,xmuS
+    if(EoS=='nS0'):
+        for iT,xT in enumerate(xtemp):  
+            values = fEoS(xT,xmuB[iT])
+            xmuQ[iT] = values['muQ']
+            xmuS[iT] = values['muS']
+        return xmuB,xtemp,xmuQ,xmuS

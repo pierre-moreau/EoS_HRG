@@ -104,38 +104,56 @@ def main(EoS,tab):
 def plot_isentropic(EoS,tab):
     """
     Calculate isentropic trajectories and export the
-    corresponding plot in the T-\mu_B plane
+    corresponding plot in the T-\mu_B,\mu_Q,\mu_S plane
     """
     print(EoS)
 
-    # inititialize plot
-    f,ax = pl.subplots(figsize=(7,7))
+    # initialize plots
+    plots = np.array([pl.subplots(figsize=(7,7)) for x in np.arange(3)])
+    f = plots[:,0]
+    ax = plots[:,1]
 
     # plot Tc(muB) first
-    ax.plot(np.linspace(0.0,0.3,10),Tc_lattice(np.linspace(0.0,0.3,10)), '--', color='k', linewidth='2.5')
+    ax[0].plot(np.linspace(0.0,0.3,10),Tc_lattice(np.linspace(0.0,0.3,10)), '--', color='k', linewidth='2.5')
 
-    # plot lines for \mu_B/T
+    # plot lines for \mu_B/T,\mu_Q/T,\mu_S/T
     for muBoT in range(1,5):
-        ax.plot(np.linspace(0.0,0.6,10),np.linspace(0.0,0.6,10)/muBoT, '--', color='grey', linewidth='1', alpha=0.5)
+        if(muBoT!=0):
+            ax[0].plot(np.linspace(0.0,0.6,10),np.linspace(0.0,0.6,10)/muBoT, '--', color='grey', linewidth='1', alpha=0.5)
 
     for snB,color in tab:
         print('    s/n_B = ', snB)
         # initialize values of \mu_B
-        xmuB,xtemp = isentropic(EoS,snB)
+        xmuB,xtemp,xmuQ,xmuS = isentropic(EoS,snB)
         
         # plot the isentropic trajectories
-        ax.plot(xmuB,xtemp, color=color, linewidth='2.5', label=r'$ s/n_B = $'+str(snB))
-        ax.legend(bbox_to_anchor=(0.55, 0.25), title_fontsize=SMALL_SIZE, loc='center left', borderaxespad=0., frameon=False)
+        ax[0].plot(xmuB,xtemp, color=color, linewidth='2.5', label=r'$ s/n_B = $'+str(snB))
+        ax[0].legend(title_fontsize=SMALL_SIZE, loc='lower right', borderaxespad=0., frameon=False)
+        ax[1].plot(-xmuQ,xtemp, color=color, linewidth='2.5', label=r'$ s/n_B = $'+str(snB))
+        ax[1].legend(title_fontsize=SMALL_SIZE, loc='lower right', borderaxespad=0., frameon=False)
+        ax[2].plot(xmuS,xtemp, color=color, linewidth='2.5', label=r'$ s/n_B = $'+str(snB))
+        ax[2].legend(title_fontsize=SMALL_SIZE, loc='lower right', borderaxespad=0., frameon=False)
     
     if(EoS == 'nS0'):
         title = r'$\langle n_S \rangle = 0$ and $\langle n_Q \rangle = 0.4 \langle n_B \rangle$'
     elif(EoS == 'muB'):
         title = r'$\mu_Q = \mu_S = 0$'
 
-    ax.set(xlabel=r'$\mu_B$ [GeV]', ylabel=r'$T$ [GeV]', title=title)
-    ax.set_xlim(0.,0.6)
-    ax.set_ylim(0.,0.5)
-    f.savefig(f"{dir_path}/fullEoS_isentropic_{EoS}.png")
+    ax[0].set(xlabel=r'$\mu_B$ [GeV]', ylabel=r'$T$ [GeV]', title=title)
+    ax[0].set_xlim(0.,0.6)
+    ax[0].set_ylim(0.,0.5)
+    f[0].savefig(f"{dir_path}/fullEoS_isentropic_TmuB_{EoS}.png")
+
+    if(EoS == 'nS0'):
+        ax[1].set(xlabel=r'$-\mu_Q$ [GeV]', ylabel=r'$T$ [GeV]', title=title)
+        ax[1].set_xlim(0.,0.05)
+        ax[1].set_ylim(0.,0.5)
+        f[1].savefig(f"{dir_path}/fullEoS_isentropic_TmuQ_{EoS}.png")
+
+        ax[2].set(xlabel=r'$\mu_S$ [GeV]', ylabel=r'$T$ [GeV]', title=title)
+        ax[2].set_xlim(0.,0.2)
+        ax[2].set_ylim(0.,0.5)
+        f[2].savefig(f"{dir_path}/fullEoS_isentropic_TmuS_{EoS}.png")
 
 @timef
 def test_find(EoS):
