@@ -560,6 +560,12 @@ def fit_freezeout(dict_yield,**kwargs):
     except:
         method = 'all'
 
+    # consider integration over mass?
+    try:
+        offshell = kwargs['offshell']
+    except:
+        offshell = False # default
+
     # we fit the HRG EoS to the ratios of particle yields as list_part1/list_part2
     # as in BES STAR paper: PHYSICAL REVIEW C 96, 044904 (2017)
     list_part1 = ['pi-','K-','p~','Lambda~','Xi~+','K-','p~','Lambda','Xi~+']
@@ -575,7 +581,7 @@ def fit_freezeout(dict_yield,**kwargs):
     for part in list_part:
         try:
             # check if the particles are given in dict_yield
-            if(dict_yield[part]!=None):
+            if(dict_yield[part]!=None and dict_yield[part]>0.):
                 data_yields.append(dict_yield[part])
                 err_yields.append(dict_yield[part+'_err'])
                 final_part.append(part)
@@ -591,7 +597,7 @@ def fit_freezeout(dict_yield,**kwargs):
     for part1,part2 in zip(list_part1,list_part2):
         try:
             # check if the particles are given in dict_yield
-            if(dict_yield[part1]!=None and dict_yield[part2]!=None):
+            if(dict_yield[part1]!=None and dict_yield[part1]>0. and dict_yield[part2]!=None and dict_yield[part2]>0.):
                 ratio = dict_yield[part1]/dict_yield[part2]
                 data_ratios.append(ratio)
                 err_ratios.append(abs(ratio)*np.sqrt((dict_yield[part1+'_err']/dict_yield[part1])**2.+(dict_yield[part2+'_err']/dict_yield[part2])**2.))
@@ -704,6 +710,31 @@ def fit_freezeout(dict_yield,**kwargs):
             \n$dV/dy={popt1[5]:.3f} \pm {perr1[5]:.3f} \ fm^3$'
         print(fit_string1)
 
+        thermo = HRG(popt1[0],popt1[1],popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
+        snB1 = thermo['s']/thermo['n_B']
+        # derivative wrt T
+        thermoT1 = HRG(popt1[0]+perr1[0]/2.,popt1[1],popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
+        thermoT2 = HRG(popt1[0]-perr1[0]/2.,popt1[1],popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
+        # derivative wrt mu_B
+        thermomuB1 = HRG(popt1[0],popt1[1]+perr1[1]/2.,popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
+        thermomuB2 = HRG(popt1[0],popt1[1]-perr1[1]/2.,popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
+        # derivative wrt mu_Q
+        thermomuQ1 = HRG(popt1[0],popt1[1],popt1[2]+perr1[2]/2.,popt1[3],gammaS=popt1[4],offshell=offshell)
+        thermomuQ2 = HRG(popt1[0],popt1[1],popt1[2]-perr1[2]/2.,popt1[3],gammaS=popt1[4],offshell=offshell)
+        # derivative wrt mu_S
+        thermomuS1 = HRG(popt1[0],popt1[1],popt1[2],popt1[3]+perr1[3]/2.,gammaS=popt1[4],offshell=offshell)
+        thermomuS2 = HRG(popt1[0],popt1[1],popt1[2],popt1[3]-perr1[3]/2.,gammaS=popt1[4],offshell=offshell)
+        # derivative wrt gamma_S
+        thermogammaS1 = HRG(popt1[0],popt1[1],popt1[2],popt1[3],gammaS=popt1[4]+perr1[4]/2.,offshell=offshell)
+        thermogammaS2 = HRG(popt1[0],popt1[1],popt1[2],popt1[3],gammaS=popt1[4]-perr1[4]/2.,offshell=offshell)
+        # error as sqrt((df/dT)**2. dT+(df/dmuB)**2.+...) with f = s/n_B
+        snB1_err = np.sqrt((thermoT1['s']/thermoT1['n_B']-thermoT2['s']/thermoT2['n_B'])**2.\
+                           +(thermomuB1['s']/thermomuB1['n_B']-thermomuB2['s']/thermomuB2['n_B'])**2.\
+                           +(thermomuQ1['s']/thermomuQ1['n_B']-thermomuQ2['s']/thermomuQ2['n_B'])**2.\
+                           +(thermomuS1['s']/thermomuS1['n_B']-thermomuS2['s']/thermomuS2['n_B'])**2.\
+                           +(thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.)
+        print(f's/n_B = {snB1} \pm {snB1_err}')
+
         # evaluate the chi^2 values for each parameter
         if(chi2_plot):
             dT, fT = m.profile('T')
@@ -721,7 +752,8 @@ def fit_freezeout(dict_yield,**kwargs):
                          'result_yields':f_yields(xyields,*popt1),\
                          'data_yields':np.array(list(zip(data_yields,err_yields))),\
                          'particle_yields':list(latex(final_part)),\
-                         'chi2_yields':output_chi21}
+                         'chi2_yields':output_chi21,\
+                         'snB_yields':np.array([snB1,snB1_err])}
     else:
         output_yields = {}
 
@@ -749,6 +781,31 @@ def fit_freezeout(dict_yield,**kwargs):
             \n$\gamma_{{S}}={popt2[4]:.3f} \pm {perr2[4]:.3f}$'
         print(fit_string2)
 
+        thermo = HRG(popt2[0],popt2[1],popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
+        snB2 = thermo['s']/thermo['n_B']
+        # derivative wrt T
+        thermoT1 = HRG(popt2[0]+perr2[0]/2.,popt2[1],popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
+        thermoT2 = HRG(popt2[0]-perr2[0]/2.,popt2[1],popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
+        # derivative wrt mu_B
+        thermomuB1 = HRG(popt2[0],popt2[1]+perr2[1]/2.,popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
+        thermomuB2 = HRG(popt2[0],popt2[1]-perr2[1]/2.,popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
+        # derivative wrt mu_Q
+        thermomuQ1 = HRG(popt2[0],popt2[1],popt2[2]+perr2[2]/2.,popt2[3],gammaS=popt2[4],offshell=offshell)
+        thermomuQ2 = HRG(popt2[0],popt2[1],popt2[2]-perr2[2]/2.,popt2[3],gammaS=popt2[4],offshell=offshell)
+        # derivative wrt mu_S
+        thermomuS1 = HRG(popt2[0],popt2[1],popt2[2],popt2[3]+perr2[3]/2.,gammaS=popt2[4],offshell=offshell)
+        thermomuS2 = HRG(popt2[0],popt2[1],popt2[2],popt2[3]-perr2[3]/2.,gammaS=popt2[4],offshell=offshell)
+        # derivative wrt gamma_S
+        thermogammaS1 = HRG(popt2[0],popt2[1],popt2[2],popt2[3],gammaS=popt2[4]+perr2[4]/2.,offshell=offshell)
+        thermogammaS2 = HRG(popt2[0],popt2[1],popt2[2],popt2[3],gammaS=popt2[4]-perr2[4]/2.,offshell=offshell)
+        # error as sqrt((df/dT)**2. dT+(df/dmuB)**2.+...) with f = s/n_B
+        snB2_err = np.sqrt((thermoT1['s']/thermoT1['n_B']-thermoT2['s']/thermoT2['n_B'])**2.\
+                           +(thermomuB1['s']/thermomuB1['n_B']-thermomuB2['s']/thermomuB2['n_B'])**2.\
+                           +(thermomuQ1['s']/thermomuQ1['n_B']-thermomuQ2['s']/thermomuQ2['n_B'])**2.\
+                           +(thermomuS1['s']/thermomuS1['n_B']-thermomuS2['s']/thermomuS2['n_B'])**2.\
+                           +(thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.)
+        print(f's/n_B = {snB2} \pm {snB2_err}')
+
         # evaluate the chi^2 values for each parameter
         if(chi2_plot):
             dT, fT = m.profile('T')
@@ -765,7 +822,8 @@ def fit_freezeout(dict_yield,**kwargs):
                          'result_ratios':f_ratios(xratios,*popt2),\
                          'data_ratios':np.array(list(zip(data_ratios,err_ratios))),\
                          'particle_ratios':list(zip(latex(final_part1),latex(final_part2))),\
-                         'chi2_ratios':output_chi22}
+                         'chi2_ratios':output_chi22,\
+                         'snB_ratios':np.array([snB2,snB2_err])}
     else:
         output_ratios = {}
 

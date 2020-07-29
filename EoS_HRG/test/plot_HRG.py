@@ -234,7 +234,7 @@ def plot_freezeout(dict_yield,**kwargs):
 
         # other settings
         ax2.yaxis.grid(True)
-        ax2.set_ylim([-2,2])
+        ax2.set_ylim([-4,4])
         ax2.set_xticks(range(len(xdata)))
         if(plot_type=='yields'):
             ax2.set_xticklabels([rf'${part}$' for part in particle_yields])
@@ -258,11 +258,13 @@ def plot_freezeout(dict_yield,**kwargs):
         result_yields = result['result_yields']
         data_yields = result['data_yields']
         particle_yields = result['particle_yields']
+        snB_yields = result['snB_yields']
         # x-values, just the indexes of ratios [1,2,...,N_particles]
         xyields = np.arange(len(data_yields))
         make_plot(xyields,data_yields,result_yields,fit_string_yields,'yields')
     else:
         fit_yields = None
+        snB_yields = None
 
     if(method=='all' or method=='ratios'):
         fit_ratios = result['fit_ratios']
@@ -270,11 +272,13 @@ def plot_freezeout(dict_yield,**kwargs):
         result_ratios = result['result_ratios']
         data_ratios = result['data_ratios']
         particle_ratios = result['particle_ratios']
+        snB_ratios = result['snB_ratios']
         # x-values, just the indexes of ratios [1,2,...,N_ratios]
         xratios = np.arange(len(data_ratios))
         make_plot(xratios,data_ratios,result_ratios,fit_string_ratios,'ratios')
     else:
         fit_ratios = None
+        snB_ratios = None
 
     # plot chi squared results
     if(chi2_plot):
@@ -300,15 +304,17 @@ def plot_freezeout(dict_yield,**kwargs):
         if(method=='all' or method=='ratios'):
             make_plot_chi2(result['chi2_ratios'],fit_ratios,'ratios')
 
-    return fit_yields,fit_ratios
+    return {'fit_yields':fit_yields,'fit_ratios':fit_ratios,'snB_yields':snB_yields,'snB_ratios':snB_ratios}
 
 ###############################################################################
 if __name__ == "__main__":
     # values of \mu_B where to test the parametrization of lQCD data
     tab = [[0.,'r'],[0.2,'tab:orange'],[0.3,'b'],[0.4,'g']]
 
+    """
     main('muB',tab)
     main('nS0',tab)
+    """
     
     # BES STAR data, for tests (PHYSICAL REVIEW C 96, 044904 (2017))
     # just the pions and Lambdas are corrected for feed-down weak decays
