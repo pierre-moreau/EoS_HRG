@@ -165,6 +165,8 @@ def main(EoS,tab):
             # when last value of \mu_B is reached, export plot
             if(j==len(tab)-1):
                 f[i].savefig(f"{dir_path}/lQCD_{EoS}_{quant}_T.png")
+                f[i].clf()
+                pl.close(f[i])
 
         # output data for each \mu_B
         if(args.output):
@@ -179,6 +181,7 @@ def main(EoS,tab):
         # plot for P/T^4, nB/T^3, s/T^3, e/T^4 for # muB
         fall,_ = plot_lattice_all(EoS,muB)
         fall.savefig(f"{dir_path}/lQCD_{EoS}_all_muB{int(10.*muB):02d}_T.png")
+        fall.clf()
         pl.close(fall)
         print('  plot \mu_B = '+str(muB)+' GeV')
 

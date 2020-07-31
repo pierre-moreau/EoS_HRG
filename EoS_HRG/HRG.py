@@ -712,27 +712,34 @@ def fit_freezeout(dict_yield,**kwargs):
 
         thermo = HRG(popt1[0],popt1[1],popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
         snB1 = thermo['s']/thermo['n_B']
+        snB1_err = 0.
         # derivative wrt T
         thermoT1 = HRG(popt1[0]+perr1[0]/2.,popt1[1],popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
         thermoT2 = HRG(popt1[0]-perr1[0]/2.,popt1[1],popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
+        if(thermoT1['n_B']!=0. and thermoT2['n_B']!=0.):
+            snB1_err += (thermoT1['s']/thermoT1['n_B']-thermoT2['s']/thermoT2['n_B'])**2.
         # derivative wrt mu_B
         thermomuB1 = HRG(popt1[0],popt1[1]+perr1[1]/2.,popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
         thermomuB2 = HRG(popt1[0],popt1[1]-perr1[1]/2.,popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
+        if(thermomuB1['n_B']!=0. and thermomuB2['n_B']!=0.):
+            snB1_err += (thermomuB1['s']/thermomuB1['n_B']-thermomuB2['s']/thermomuB2['n_B'])**2.
         # derivative wrt mu_Q
         thermomuQ1 = HRG(popt1[0],popt1[1],popt1[2]+perr1[2]/2.,popt1[3],gammaS=popt1[4],offshell=offshell)
         thermomuQ2 = HRG(popt1[0],popt1[1],popt1[2]-perr1[2]/2.,popt1[3],gammaS=popt1[4],offshell=offshell)
+        if(thermomuQ1['n_B']!=0. and thermomuQ2['n_B']!=0.):
+            snB1_err += (thermomuQ1['s']/thermomuQ1['n_B']-thermomuQ2['s']/thermomuQ2['n_B'])**2.
         # derivative wrt mu_S
         thermomuS1 = HRG(popt1[0],popt1[1],popt1[2],popt1[3]+perr1[3]/2.,gammaS=popt1[4],offshell=offshell)
         thermomuS2 = HRG(popt1[0],popt1[1],popt1[2],popt1[3]-perr1[3]/2.,gammaS=popt1[4],offshell=offshell)
+        if(thermomuS1['n_B']!=0. and thermomuS2['n_B']!=0.):
+            snB1_err += (thermomuS1['s']/thermomuS1['n_B']-thermomuS2['s']/thermomuS2['n_B'])**2.
         # derivative wrt gamma_S
         thermogammaS1 = HRG(popt1[0],popt1[1],popt1[2],popt1[3],gammaS=popt1[4]+perr1[4]/2.,offshell=offshell)
         thermogammaS2 = HRG(popt1[0],popt1[1],popt1[2],popt1[3],gammaS=popt1[4]-perr1[4]/2.,offshell=offshell)
-        # error as sqrt((df/dT)**2. dT+(df/dmuB)**2.+...) with f = s/n_B
-        snB1_err = np.sqrt((thermoT1['s']/thermoT1['n_B']-thermoT2['s']/thermoT2['n_B'])**2.\
-                           +(thermomuB1['s']/thermomuB1['n_B']-thermomuB2['s']/thermomuB2['n_B'])**2.\
-                           +(thermomuQ1['s']/thermomuQ1['n_B']-thermomuQ2['s']/thermomuQ2['n_B'])**2.\
-                           +(thermomuS1['s']/thermomuS1['n_B']-thermomuS2['s']/thermomuS2['n_B'])**2.\
-                           +(thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.)
+        if(thermogammaS1['n_B']!=0. and thermogammaS2['n_B']!=0.):
+            snB1_err += (thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.
+        # error as sqrt((df/dT * dT)**2.+(df/dmuB * dmuB)**2.+...) with f = s/n_B
+        snB1_err = np.sqrt(snB1_err)
         print(f's/n_B = {snB1} \pm {snB1_err}')
 
         # evaluate the chi^2 values for each parameter
@@ -783,27 +790,34 @@ def fit_freezeout(dict_yield,**kwargs):
 
         thermo = HRG(popt2[0],popt2[1],popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
         snB2 = thermo['s']/thermo['n_B']
+        snB2_err = 0.
         # derivative wrt T
         thermoT1 = HRG(popt2[0]+perr2[0]/2.,popt2[1],popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
         thermoT2 = HRG(popt2[0]-perr2[0]/2.,popt2[1],popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
+        if(thermoT1['n_B']!=0. and thermoT2['n_B']!=0.):
+            snB2_err += (thermoT1['s']/thermoT1['n_B']-thermoT2['s']/thermoT2['n_B'])**2.
         # derivative wrt mu_B
         thermomuB1 = HRG(popt2[0],popt2[1]+perr2[1]/2.,popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
         thermomuB2 = HRG(popt2[0],popt2[1]-perr2[1]/2.,popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
+        if(thermomuB1['n_B']!=0. and thermomuB2['n_B']!=0.):
+            snB2_err += (thermomuB1['s']/thermomuB1['n_B']-thermomuB2['s']/thermomuB2['n_B'])**2.
         # derivative wrt mu_Q
         thermomuQ1 = HRG(popt2[0],popt2[1],popt2[2]+perr2[2]/2.,popt2[3],gammaS=popt2[4],offshell=offshell)
         thermomuQ2 = HRG(popt2[0],popt2[1],popt2[2]-perr2[2]/2.,popt2[3],gammaS=popt2[4],offshell=offshell)
+        if(thermomuQ1['n_B']!=0. and thermomuQ2['n_B']!=0.):
+            snB2_err += (thermomuQ1['s']/thermomuQ1['n_B']-thermomuQ2['s']/thermomuQ2['n_B'])**2.
         # derivative wrt mu_S
         thermomuS1 = HRG(popt2[0],popt2[1],popt2[2],popt2[3]+perr2[3]/2.,gammaS=popt2[4],offshell=offshell)
         thermomuS2 = HRG(popt2[0],popt2[1],popt2[2],popt2[3]-perr2[3]/2.,gammaS=popt2[4],offshell=offshell)
+        if(thermomuS1['n_B']!=0. and thermomuS2['n_B']!=0.):
+            snB2_err += (thermomuS1['s']/thermomuS1['n_B']-thermomuS2['s']/thermomuS2['n_B'])**2.
         # derivative wrt gamma_S
         thermogammaS1 = HRG(popt2[0],popt2[1],popt2[2],popt2[3],gammaS=popt2[4]+perr2[4]/2.,offshell=offshell)
         thermogammaS2 = HRG(popt2[0],popt2[1],popt2[2],popt2[3],gammaS=popt2[4]-perr2[4]/2.,offshell=offshell)
-        # error as sqrt((df/dT)**2. dT+(df/dmuB)**2.+...) with f = s/n_B
-        snB2_err = np.sqrt((thermoT1['s']/thermoT1['n_B']-thermoT2['s']/thermoT2['n_B'])**2.\
-                           +(thermomuB1['s']/thermomuB1['n_B']-thermomuB2['s']/thermomuB2['n_B'])**2.\
-                           +(thermomuQ1['s']/thermomuQ1['n_B']-thermomuQ2['s']/thermomuQ2['n_B'])**2.\
-                           +(thermomuS1['s']/thermomuS1['n_B']-thermomuS2['s']/thermomuS2['n_B'])**2.\
-                           +(thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.)
+        if(thermogammaS1['n_B']!=0. and thermogammaS2['n_B']!=0.):
+            snB2_err += (thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.
+        # error as sqrt((df/dT * dT)**2.+(df/dmuB * dmuB)**2.+...) with f = s/n_B
+        snB2_err = np.sqrt(snB2_err)
         print(f's/n_B = {snB2} \pm {snB2_err}')
 
         # evaluate the chi^2 values for each parameter

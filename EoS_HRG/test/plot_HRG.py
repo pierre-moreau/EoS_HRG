@@ -110,6 +110,8 @@ def main(EoS,tab):
         ax[ipl].set_xlim(Tmin,Tmax)
         ax[ipl].set_ylim(0.,max_val[quant])
         f[ipl].savefig(f"{dir_path}/HRG_{quant}_T_{EoS}{species_out}.png")
+        f[ipl].clf()
+        pl.close(f[ipl])
 
     def plot_species(EoS,muB):
         """
@@ -169,6 +171,8 @@ def main(EoS,tab):
             ax[ipl].set_xlim(Tmin,Tmax)
             ax[ipl].set_yscale('log')
             f[ipl].savefig(f"{dir_path}/HRG_{quant}_T_muB{int(muB*10):02d}_{EoS}_species.png")
+            f[ipl].clf()
+            pl.close(f[ipl])
 
     # call function plot_species here
     for muB,_ in tab:
@@ -248,6 +252,8 @@ def plot_freezeout(dict_yield,**kwargs):
 
         # save plots
         f.savefig(plot_file_name+f'_{plot_type}.png')  
+        f.clf()
+        pl.close(f)
 
     # calculate fits and extract results
     result = fit_freezeout(dict_yield,**kwargs) 
@@ -298,6 +304,8 @@ def plot_freezeout(dict_yield,**kwargs):
                 ax.plot(data_chi2[0],data_chi2[1])
                 ax.set(xlabel=f'${list_latex[i]}$',ylabel=r'$\chi^2$',title=f'${list_latex[i]}={fit[i,0]:.3f} \pm {fit[i,1]:.3f}\ {list_unit[i]}$') 
                 f.savefig(plot_file_name+f'_{plot_type}_{list_quant[i]}.png')
+                f.clf()
+                pl.close(f)
 
         if(method=='all' or method=='yields'):
             make_plot_chi2(result['chi2_yields'],fit_yields,'yields')

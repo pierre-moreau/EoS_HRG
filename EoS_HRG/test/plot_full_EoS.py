@@ -97,6 +97,8 @@ def main(EoS,tab):
         ax[ipl].set_xlim(Tmin,Tmax)
         ax[ipl].set_ylim(0.,)
         f[ipl].savefig(f"{dir_path}/fullEoS_{quant}_T_{EoS}.png")
+        f[ipl].clf()
+        pl.close(f[ipl])
         
 
 ########################################################################
@@ -143,17 +145,23 @@ def plot_isentropic(EoS,tab):
     ax[0].set_xlim(0.,0.6)
     ax[0].set_ylim(0.,0.5)
     f[0].savefig(f"{dir_path}/fullEoS_isentropic_TmuB_{EoS}.png")
+    f[0].clf()
+    pl.close(f[0])
 
     if(EoS == 'nS0'):
         ax[1].set(xlabel=r'$-\mu_Q$ [GeV]', ylabel=r'$T$ [GeV]', title=title)
         ax[1].set_xlim(0.,0.05)
         ax[1].set_ylim(0.,0.5)
         f[1].savefig(f"{dir_path}/fullEoS_isentropic_TmuQ_{EoS}.png")
+        f[1].clf()
+        pl.close(f[1])
 
         ax[2].set(xlabel=r'$\mu_S$ [GeV]', ylabel=r'$T$ [GeV]', title=title)
         ax[2].set_xlim(0.,0.2)
         ax[2].set_ylim(0.,0.5)
         f[2].savefig(f"{dir_path}/fullEoS_isentropic_TmuS_{EoS}.png")
+        f[2].clf()
+        pl.close(f[2])
 
 @timef
 def test_find(EoS):
@@ -176,7 +184,7 @@ def test_find(EoS):
         fun = lambda T,muB,mQ,muS : full_EoS_nS0(T,muB)
 
     xtrue = np.zeros(Nunk) # record when a certain accuracy is achieved
-    for itest in trange(100):
+    for _ in trange(100):
 
         # first randomly pick T,muB,muQ,muS
         T = np.random.uniform(0.05,0.8)
