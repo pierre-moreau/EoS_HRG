@@ -5,7 +5,7 @@ and to the matching procedure in Phys. Rev. C 100, 024907.
 Possibility to fit HRG parameters to final heavy-ion particle yields.
 """
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 # import decay data here
 import re

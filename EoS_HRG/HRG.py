@@ -7,6 +7,7 @@ import os
 import argparse
 from iminuit import Minuit
 from iminuit.cost import LeastSquares
+from EoS_HRG.fit_lattice import EoS_nS0
 # import from __init__.py
 from . import *
 
@@ -425,7 +426,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
     return {'T': xT,'P':p, 's':s, 'n':ndens, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
 
 ########################################################################
-def HRG_freezout(T,muB,muQ,muS,gammaS,**kwargs):
+def HRG_freezout(T,muB,muQ,muS,gammaS,EoS='full',**kwargs):
     """
     Calculate all particle number densities from HRG
     Includes decays as well.
@@ -479,6 +480,11 @@ def HRG_freezout(T,muB,muQ,muS,gammaS,**kwargs):
     # dictionnary containing final densities (incuding possible decays) from HRG
     final_dens = {}
     # fill dictionnaries with densities
+    if(EoS=='nS0'):
+        init_EoS = EoS_nS0(HRG,T,muB,gammaS=gammaS,offshell=offshell)
+        # keep the values of muQ and muS for later
+        muQ = init_EoS['muQ']
+        muS = init_EoS['muS']
     for part in list_particles:
         part_dens = HRG(T,muB,muQ,muS,gammaS=gammaS,offshell=offshell,species=part.name)['n']
         init_dens[part.name] = part_dens
@@ -566,6 +572,12 @@ def fit_freezeout(dict_yield,**kwargs):
     except:
         offshell = False # default
 
+    # evaluate freeze out parameters for which EoS? full or strangeness neutrality ns0 ?
+    try:
+        EoS = kwargs['EoS']
+    except:
+        EoS = 'all' # default
+
     # we fit the HRG EoS to the ratios of particle yields as list_part1/list_part2
     # as in BES STAR paper: PHYSICAL REVIEW C 96, 044904 (2017)
     list_part1 = ['pi-','K-','p~','Lambda~','Xi~+','K-','p~','Lambda','Xi~+']
@@ -613,7 +625,36 @@ def fit_freezeout(dict_yield,**kwargs):
         """
         result = np.zeros(len(final_part))
         # calculate all densities
-        result_HRG = HRG_freezout(T,muB,muQ,muS,gammaS,**kwargs)
+        result_HRG = HRG_freezout(T,muB,muQ,muS,gammaS,EoS='full',**kwargs)
+        # loop over particles
+        for i,part in enumerate(final_part):
+            yval = result_HRG[part]
+            #print('part,yval=',part,yval)
+            
+            # if no decays, then Sigma0 should be added to Lambda
+            # if decays are activated, then Sigma0 decays to Lambda
+            if(not(freezeout_decay)):
+                # include Sigma0 with Lambda
+                if(part=='Lambda'):
+                    yval += result_HRG['Sigma0']
+                # include Sigma~0 with Lambda~
+                elif(part=='Lambda~'):
+                    yval += result_HRG['Sigma~0']
+                    
+            # number of particles
+            result[i] = yval*T**3.*dVdy/(0.197**3.)
+
+        # return the list of yields
+        return result
+
+    def f_yields_nS0(x,T,muB,gammaS,dVdy):
+        """
+        Calculate the particle yields for fixed T,muB,gammaS,volume
+        x is a dummy argument
+        """
+        result = np.zeros(len(final_part))
+        # calculate all densities
+        result_HRG = HRG_freezout(T,muB,0.,0.,gammaS,EoS='nS0',**kwargs)
         # loop over particles
         for i,part in enumerate(final_part):
             yval = result_HRG[part]
@@ -642,7 +683,44 @@ def fit_freezeout(dict_yield,**kwargs):
         """
         result = np.zeros(len(data_ratios))
         # calculate all densities
-        result_HRG = HRG_freezout(T,muB,muQ,muS,gammaS,**kwargs)
+        result_HRG = HRG_freezout(T,muB,muQ,muS,gammaS,EoS='full',**kwargs)
+        # loop over different ratios
+        for i,(part1,part2) in enumerate(zip(final_part1,final_part2)):
+            yval1 = result_HRG[part1]
+            yval2 = result_HRG[part2]
+            #print('part,yval1=',part1,yval1)
+            #print('part,yval2=',part2,yval2)
+            
+            # if no decays, then Sigma0 should be added to Lambda
+            # if decays are activated, then Sigma0 decays to Lambda
+            if(not(freezeout_decay)):
+                # include Sigma0 with Lambda
+                if(part1=='Lambda'):
+                    yval1 += result_HRG['Sigma0']
+                # include Sigma~0 with Lambda~
+                elif(part1=='Lambda~'):
+                    yval1 += result_HRG['Sigma~0']
+                # include Sigma0 with Lambda
+                if(part2=='Lambda'):
+                    yval2 += result_HRG['Sigma0']
+                # include Sigma~0 with Lambda~
+                elif(part2=='Lambda~'):
+                    yval2 += result_HRG['Sigma~0']
+                    
+            # ratio of particle1/particle2
+            result[i] = yval1/yval2
+
+        # return the list of ratios
+        return result
+
+    def f_ratios_nS0(x,T,muB,gammaS):
+        """
+        Calculate the ratios of particle yields for fixed T,muB,gammaS
+        x is a dummy argument
+        """
+        result = np.zeros(len(data_ratios))
+        # calculate all densities
+        result_HRG = HRG_freezout(T,muB,0.,0.,gammaS,EoS='nS0',**kwargs)
         # loop over different ratios
         for i,(part1,part2) in enumerate(zip(final_part1,final_part2)):
             yval1 = result_HRG[part1]
@@ -686,7 +764,7 @@ def fit_freezeout(dict_yield,**kwargs):
     bounds = ((0.100, 0.200), (0, 0.6), (-0.2,0.2), (0,0.2), (0.0,1.2), (100.,10000.))
 
     # fit with yields
-    if(method=='all' or method=='yields'):
+    if((EoS=='all' or EoS=='full') and (method=='all' or method=='yields')):
         # x-values, just the indexes of ratios [1,2,...,N_particles]
         xyields = np.arange(len(final_part))
         # initialize Minuit least_squares class
@@ -701,13 +779,13 @@ def fit_freezeout(dict_yield,**kwargs):
         # display values and errors
         popt1 = m.values.values()
         perr1 = m.errors.values()
-        print('\nfit from yields:')
-        fit_string1 = f'$T_{{ch}}={popt1[0]:.3f} \pm {perr1[0]:.3f}\ GeV$\
-            \n$\mu_{{B}}={popt1[1]:.3f} \pm {perr1[1]:.3f}\ GeV$\
-            \n$\mu_{{Q}}={popt1[2]:.3f} \pm {perr1[2]:.3f}\ GeV$\
-            \n$\mu_{{S}}={popt1[3]:.3f} \pm {perr1[3]:.3f}\ GeV$\
-            \n$\gamma_{{S}}={popt1[4]:.3f} \pm {perr1[4]:.3f}$\
-            \n$dV/dy={popt1[5]:.3f} \pm {perr1[5]:.3f} \ fm^3$'
+        print('\nfit from yields, full EoS:')
+        fit_string1 = f'$T_{{ch}}={popt1[0]:.4f} \pm {perr1[0]:.4f}\ GeV$\
+            \n$\mu_{{B}}={popt1[1]:.4f} \pm {perr1[1]:.4f}\ GeV$\
+            \n$\mu_{{Q}}={popt1[2]:.4f} \pm {perr1[2]:.4f}\ GeV$\
+            \n$\mu_{{S}}={popt1[3]:.4f} \pm {perr1[3]:.4f}\ GeV$\
+            \n$\gamma_{{S}}={popt1[4]:.2f} \pm {perr1[4]:.2f}$\
+            \n$dV/dy={popt1[5]:.1f} \pm {perr1[5]:.1f} \ fm^3$'
         print(fit_string1)
 
         thermo = HRG(popt1[0],popt1[1],popt1[2],popt1[3],gammaS=popt1[4],offshell=offshell)
@@ -738,7 +816,7 @@ def fit_freezeout(dict_yield,**kwargs):
         thermogammaS2 = HRG(popt1[0],popt1[1],popt1[2],popt1[3],gammaS=popt1[4]-perr1[4]/2.,offshell=offshell)
         if(thermogammaS1['n_B']!=0. and thermogammaS2['n_B']!=0.):
             snB1_err += (thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.
-        # error as sqrt((df/dT * dT)**2.+(df/dmuB * dmuB)**2.+...) with f = s/n_B
+        # error as sqrt((df/dT)**2. dT+(df/dmuB)**2.+...) with f = s/n_B
         snB1_err = np.sqrt(snB1_err)
         print(f's/n_B = {snB1} \pm {snB1_err}')
 
@@ -764,8 +842,83 @@ def fit_freezeout(dict_yield,**kwargs):
     else:
         output_yields = {}
 
+    # fit with yields
+    # strangeness neutrality 
+    if((EoS=='all' or EoS=='nS0') and (method=='all' or method=='yields')):
+        # x-values, just the indexes of ratios [1,2,...,N_particles]
+        xyields = np.arange(len(final_part))
+        # initialize Minuit least_squares class
+        least_squares = LeastSquares(xyields, data_yields, err_yields, f_yields_nS0)
+        m = Minuit(least_squares, T=guess[0], muB=guess[1], gammaS=guess[4], dVdy=guess[5],
+                           limit_T=bounds[0],limit_muB=bounds[1],limit_gammaS=bounds[4],limit_dVdy=bounds[5],
+                           fix_T=fix_T,fix_muB=fix_muB,fix_gammaS=fix_gammaS,fix_dVdy=fix_dVdy)
+        m.migrad() # finds minimum of least_squares function
+        m.hesse()  # computes errors
+        #print(m.params) # minuit output
+
+        # display values and errors
+        popt1 = m.values.values()
+        perr1 = m.errors.values()
+        thermo = EoS_nS0(HRG,popt1[0],popt1[1],gammaS=popt1[2],offshell=offshell)
+
+        print('\nfit from yields, nS0 EoS:')
+        fit_string1 = f'$T_{{ch}}={popt1[0]:.4f} \pm {perr1[0]:.4f}\ GeV$\
+            \n$\mu_{{B}}={popt1[1]:.4f} \pm {perr1[1]:.4f}\ GeV$\
+            \n$\gamma_{{S}}={popt1[2]:.2f} \pm {perr1[2]:.2f}$\
+            \n$dV/dy={popt1[3]:.1f} \pm {perr1[3]:.1f} \ fm^3$\
+            \n$\mu_{{Q}}={thermo["muQ"]:.4f}\ GeV$\
+            \n$\mu_{{S}}={thermo["muS"]:.4f}\ GeV$'
+        print(fit_string1)
+
+        snB1 = thermo['s']/thermo['n_B']
+        snB1_err = 0.
+        # derivative wrt T
+        thermoT1 = EoS_nS0(HRG,popt1[0]+perr1[0]/2.,popt1[1],gammaS=popt1[2],offshell=offshell)
+        thermoT2 = EoS_nS0(HRG,popt1[0]-perr1[0]/2.,popt1[1],gammaS=popt1[2],offshell=offshell)
+        if(thermoT1['n_B']!=0. and thermoT2['n_B']!=0.):
+            snB1_err += (thermoT1['s']/thermoT1['n_B']-thermoT2['s']/thermoT2['n_B'])**2.
+        # derivative wrt mu_B
+        thermomuB1 = EoS_nS0(HRG,popt1[0],popt1[1]+perr1[1]/2.,gammaS=popt1[2],offshell=offshell)
+        thermomuB2 = EoS_nS0(HRG,popt1[0],popt1[1]-perr1[1]/2.,gammaS=popt1[2],offshell=offshell)
+        if(thermomuB1['n_B']!=0. and thermomuB2['n_B']!=0.):
+            snB1_err += (thermomuB1['s']/thermomuB1['n_B']-thermomuB2['s']/thermomuB2['n_B'])**2.
+        # derivative wrt gamma_S
+        thermogammaS1 = EoS_nS0(HRG,popt1[0],popt1[1],gammaS=popt1[2]+perr1[2]/2.,offshell=offshell)
+        thermogammaS2 = EoS_nS0(HRG,popt1[0],popt1[1],gammaS=popt1[2]-perr1[2]/2.,offshell=offshell)
+        if(thermogammaS1['n_B']!=0. and thermogammaS2['n_B']!=0.):
+            snB1_err += (thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.
+        # error as sqrt((df/dT)**2. dT+(df/dmuB)**2.+...) with f = s/n_B
+        snB1_err = np.sqrt(snB1_err)
+        print(f's/n_B = {snB1} \pm {snB1_err}')
+
+        # evaluate the chi^2 values for each parameter
+        if(chi2_plot):
+            dT, fT = m.profile('T')
+            dmuB, fmuB = m.profile('muB')
+            dgammaS, fgammaS = m.profile('gammaS') 
+            ddVdy, fdVdy = m.profile('dVdy') 
+            output_chi21 = [[dT,fT],[dmuB,fmuB],[dgammaS,fgammaS],[ddVdy,fdVdy]]
+        else:
+            output_chi21 = None
+
+        result_yields_nS0 = f_yields_nS0(xyields,*popt1)
+        Tch,muB,gammaS,dVdy = popt1
+        Tch_err,muB_err,gammaS_err,dVdy_err = perr1
+        popt1 = np.array([Tch,muB,thermo['muQ'],thermo['muS'],gammaS,dVdy])
+        perr1 = np.array([Tch_err,muB_err,0.,0.,gammaS_err,dVdy_err])
+
+        output_yields_nS0 = {'fit_yields_nS0':np.array(list(zip(popt1,perr1))),\
+                         'fit_string_yields_nS0':fit_string1,\
+                         'result_yields_nS0':result_yields_nS0,\
+                         'data_yields':np.array(list(zip(data_yields,err_yields))),\
+                         'particle_yields':list(latex(final_part)),\
+                         'chi2_yields_nS0':output_chi21,\
+                         'snB_yields_nS0':np.array([snB1,snB1_err])}
+    else:
+        output_yields_nS0 = {}
+
     # fit with ratios
-    if(method=='all' or method=='ratios'):
+    if((EoS=='all' or EoS=='full') and (method=='all' or method=='ratios')):
         # x-values, just the indexes of ratios [1,2,...,N_ratios]
         xratios = np.arange(len(data_ratios))
         # initialize Minuit least_squares class
@@ -780,12 +933,12 @@ def fit_freezeout(dict_yield,**kwargs):
         # display values and errors
         popt2 = m.values.values()
         perr2 = m.errors.values()
-        print('\nfit from ratios:')
-        fit_string2 = f'$T_{{ch}}={popt2[0]:.3f} \pm {perr2[0]:.3f}\ GeV$\
-            \n$\mu_{{B}}={popt2[1]:.3f} \pm {perr2[1]:.3f}\ GeV$\
-            \n$\mu_{{Q}}={popt2[2]:.3f} \pm {perr2[2]:.3f}\ GeV$\
-            \n$\mu_{{S}}={popt2[3]:.3f} \pm {perr2[3]:.3f}\ GeV$\
-            \n$\gamma_{{S}}={popt2[4]:.3f} \pm {perr2[4]:.3f}$'
+        print('\nfit from ratios, full EoS:')
+        fit_string2 = f'$T_{{ch}}={popt2[0]:.4f} \pm {perr2[0]:.4f}\ GeV$\
+            \n$\mu_{{B}}={popt2[1]:.4f} \pm {perr2[1]:.4f}\ GeV$\
+            \n$\mu_{{Q}}={popt2[2]:.4f} \pm {perr2[2]:.4f}\ GeV$\
+            \n$\mu_{{S}}={popt2[3]:.4f} \pm {perr2[3]:.4f}\ GeV$\
+            \n$\gamma_{{S}}={popt2[4]:.2f} \pm {perr2[4]:.2f}$'
         print(fit_string2)
 
         thermo = HRG(popt2[0],popt2[1],popt2[2],popt2[3],gammaS=popt2[4],offshell=offshell)
@@ -816,7 +969,7 @@ def fit_freezeout(dict_yield,**kwargs):
         thermogammaS2 = HRG(popt2[0],popt2[1],popt2[2],popt2[3],gammaS=popt2[4]-perr2[4]/2.,offshell=offshell)
         if(thermogammaS1['n_B']!=0. and thermogammaS2['n_B']!=0.):
             snB2_err += (thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.
-        # error as sqrt((df/dT * dT)**2.+(df/dmuB * dmuB)**2.+...) with f = s/n_B
+        # error as sqrt((df/dT)**2. dT+(df/dmuB)**2.+...) with f = s/n_B
         snB2_err = np.sqrt(snB2_err)
         print(f's/n_B = {snB2} \pm {snB2_err}')
 
@@ -841,5 +994,81 @@ def fit_freezeout(dict_yield,**kwargs):
     else:
         output_ratios = {}
 
-    output_yields.update(output_ratios)
-    return output_yields
+    # fit with ratios
+    if((EoS=='all' or EoS=='nS0') and (method=='all' or method=='ratios')):
+        # x-values, just the indexes of ratios [1,2,...,N_ratios]
+        xratios = np.arange(len(data_ratios))
+        # initialize Minuit least_squares class
+        least_squares = LeastSquares(xratios, data_ratios, err_ratios, f_ratios_nS0)
+        m = Minuit(least_squares, T=guess[0], muB=guess[1], gammaS=guess[4],
+                           limit_T=bounds[0],limit_muB=bounds[1],limit_gammaS=bounds[4],
+                           fix_T=fix_T,fix_muB=fix_muB,fix_gammaS=fix_gammaS)
+        m.migrad() # finds minimum of least_squares function
+        m.hesse()  # computes errors
+        #print(m.params) # minuit output
+
+        # display values and errors
+        popt2 = m.values.values()
+        perr2 = m.errors.values()
+        thermo = EoS_nS0(HRG,popt2[0],popt2[1],gammaS=popt2[2],offshell=offshell)
+        print('\nfit from ratios, nS0 EoS:')
+        fit_string2 = f'$T_{{ch}}={popt2[0]:.4f} \pm {perr2[0]:.4f}\ GeV$\
+            \n$\mu_{{B}}={popt2[1]:.4f} \pm {perr2[1]:.4f}\ GeV$\
+            \n$\gamma_{{S}}={popt2[2]:.2f} \pm {perr2[2]:.2f}$\
+            \n$\mu_{{Q}}={thermo["muQ"]:.4f}\ GeV$\
+            \n$\mu_{{S}}={thermo["muS"]:.4f}\ GeV$'
+        print(fit_string2)
+
+        snB2 = thermo['s']/thermo['n_B']
+        snB2_err = 0.
+        # derivative wrt T
+        thermoT1 = EoS_nS0(HRG,popt2[0]+perr2[0]/2.,popt2[1],gammaS=popt2[2],offshell=offshell)
+        thermoT2 = EoS_nS0(HRG,popt2[0]-perr2[0]/2.,popt2[1],gammaS=popt2[2],offshell=offshell)
+        if(thermoT1['n_B']!=0. and thermoT2['n_B']!=0.):
+            snB2_err += (thermoT1['s']/thermoT1['n_B']-thermoT2['s']/thermoT2['n_B'])**2.
+        # derivative wrt mu_B
+        thermomuB1 = EoS_nS0(HRG,popt2[0],popt2[1]+perr2[1]/2.,gammaS=popt2[2],offshell=offshell)
+        thermomuB2 = EoS_nS0(HRG,popt2[0],popt2[1]-perr2[1]/2.,gammaS=popt2[2],offshell=offshell)
+        if(thermomuB1['n_B']!=0. and thermomuB2['n_B']!=0.):
+            snB2_err += (thermomuB1['s']/thermomuB1['n_B']-thermomuB2['s']/thermomuB2['n_B'])**2.
+        # derivative wrt gamma_S
+        thermogammaS1 = EoS_nS0(HRG,popt2[0],popt2[1],gammaS=popt2[2]+perr2[2]/2.,offshell=offshell)
+        thermogammaS2 = EoS_nS0(HRG,popt2[0],popt2[1],gammaS=popt2[2]-perr2[2]/2.,offshell=offshell)
+        if(thermogammaS1['n_B']!=0. and thermogammaS2['n_B']!=0.):
+            snB2_err += (thermogammaS1['s']/thermogammaS1['n_B']-thermogammaS2['s']/thermogammaS2['n_B'])**2.
+        # error as sqrt((df/dT)**2. dT+(df/dmuB)**2.+...) with f = s/n_B
+        snB2_err = np.sqrt(snB2_err)
+        print(f's/n_B = {snB2} \pm {snB2_err}')
+
+        # evaluate the chi^2 values for each parameter
+        if(chi2_plot):
+            dT, fT = m.profile('T')
+            dmuB, fmuB = m.profile('muB')
+            dgammaS, fgammaS = m.profile('gammaS') 
+            output_chi22 = [[dT,fT],[dmuB,fmuB],[dgammaS,fgammaS]]
+        else:
+            output_chi22 = None
+
+        result_ratios_nS0 = f_ratios_nS0(xratios,*popt2)
+        Tch,muB,gammaS = popt2
+        Tch_err,muB_err,gammaS_err = perr2
+        popt2 = np.array([Tch,muB,thermo['muQ'],thermo['muS'],gammaS])
+        perr2 = np.array([Tch_err,muB_err,0.,0.,gammaS_err])
+
+        output_ratios_nS0 = {'fit_ratios_nS0':np.array(list(zip(popt2,perr2))),\
+                         'fit_string_ratios_nS0':fit_string2,\
+                         'result_ratios_nS0':result_ratios_nS0,\
+                         'data_ratios':np.array(list(zip(data_ratios,err_ratios))),\
+                         'particle_ratios':list(zip(latex(final_part1),latex(final_part2))),\
+                         'chi2_ratios_nS0':output_chi22,\
+                         'snB_ratios_nS0':np.array([snB2,snB2_err])}
+    else:
+        output_ratios_nS0 = {}
+
+    output = {}
+    output.update(output_yields)
+    output.update(output_ratios)
+    output.update(output_yields_nS0)
+    output.update(output_ratios_nS0)
+
+    return output

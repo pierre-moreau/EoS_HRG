@@ -209,7 +209,13 @@ def plot_freezeout(dict_yield,**kwargs):
     except:
         method = 'all'
 
-    def make_plot(xdata,ydata,fit_data,fit_string,plot_type):
+    # evaluate freeze out parameters for which EoS? full or strangeness neutrality ns0 ?
+    try:
+        EoS = kwargs['EoS']
+    except:
+        EoS = 'all' # default
+
+    def make_plot(xdata,ydata,fit_data,fit_string,plot_type,EoS):
         """
         Function to plot the freeze out fits
         """
@@ -251,14 +257,14 @@ def plot_freezeout(dict_yield,**kwargs):
         ax2.label_outer()
 
         # save plots
-        f.savefig(plot_file_name+f'_{plot_type}.png')  
+        f.savefig(plot_file_name+f'_{plot_type}_{EoS}_EoS.png')  
         f.clf()
         pl.close(f)
 
     # calculate fits and extract results
     result = fit_freezeout(dict_yield,**kwargs) 
 
-    if(method=='all' or method=='yields'):
+    if((EoS=='all' or EoS=='full') and (method=='all' or method=='yields')):
         fit_yields = result['fit_yields']
         fit_string_yields = result['fit_string_yields']
         result_yields = result['result_yields']
@@ -267,12 +273,26 @@ def plot_freezeout(dict_yield,**kwargs):
         snB_yields = result['snB_yields']
         # x-values, just the indexes of ratios [1,2,...,N_particles]
         xyields = np.arange(len(data_yields))
-        make_plot(xyields,data_yields,result_yields,fit_string_yields,'yields')
+        make_plot(xyields,data_yields,result_yields,fit_string_yields,'yields','full')
     else:
         fit_yields = None
         snB_yields = None
 
-    if(method=='all' or method=='ratios'):
+    if((EoS=='all' or EoS=='nS0') and (method=='all' or method=='yields')):
+        fit_yields_nS0 = result['fit_yields_nS0']
+        fit_string_yields_nS0 = result['fit_string_yields_nS0']
+        result_yields_nS0 = result['result_yields_nS0']
+        data_yields = result['data_yields']
+        particle_yields = result['particle_yields']
+        snB_yields_nS0 = result['snB_yields_nS0']
+        # x-values, just the indexes of ratios [1,2,...,N_particles]
+        xyields = np.arange(len(data_yields))
+        make_plot(xyields,data_yields,result_yields_nS0,fit_string_yields_nS0,'yields','nS0')
+    else:
+        fit_yields_nS0 = None
+        snB_yields_nS0 = None
+
+    if((EoS=='all' or EoS=='full') and (method=='all' or method=='ratios')):
         fit_ratios = result['fit_ratios']
         fit_string_ratios = result['fit_string_ratios']
         result_ratios = result['result_ratios']
@@ -281,15 +301,29 @@ def plot_freezeout(dict_yield,**kwargs):
         snB_ratios = result['snB_ratios']
         # x-values, just the indexes of ratios [1,2,...,N_ratios]
         xratios = np.arange(len(data_ratios))
-        make_plot(xratios,data_ratios,result_ratios,fit_string_ratios,'ratios')
+        make_plot(xratios,data_ratios,result_ratios,fit_string_ratios,'ratios','full')
     else:
         fit_ratios = None
         snB_ratios = None
 
+    if((EoS=='all' or EoS=='nS0') and (method=='all' or method=='ratios')):
+        fit_ratios_nS0 = result['fit_ratios_nS0']
+        fit_string_ratios_nS0 = result['fit_string_ratios_nS0']
+        result_ratios_nS0 = result['result_ratios_nS0']
+        data_ratios = result['data_ratios']
+        particle_ratios = result['particle_ratios']
+        snB_ratios_nS0 = result['snB_ratios_nS0']
+        # x-values, just the indexes of ratios [1,2,...,N_ratios]
+        xratios = np.arange(len(data_ratios))
+        make_plot(xratios,data_ratios,result_ratios_nS0,fit_string_ratios_nS0,'ratios','nS0')
+    else:
+        fit_ratios_nS0 = None
+        snB_ratios_nS0 = None
+
     # plot chi squared results
     if(chi2_plot):
 
-        def make_plot_chi2(all_data_chi2,fit,plot_type):
+        def make_plot_chi2(all_data_chi2,fit,plot_type,EOS):
             """
             Function to plot the chi^2 for each parameter
             """
@@ -303,16 +337,21 @@ def plot_freezeout(dict_yield,**kwargs):
                 ax.axvspan(fit[i,0]-fit[i,1], fit[i,0]+fit[i,1], alpha=0.25, color='k')
                 ax.plot(data_chi2[0],data_chi2[1])
                 ax.set(xlabel=f'${list_latex[i]}$',ylabel=r'$\chi^2$',title=f'${list_latex[i]}={fit[i,0]:.3f} \pm {fit[i,1]:.3f}\ {list_unit[i]}$') 
-                f.savefig(plot_file_name+f'_{plot_type}_{list_quant[i]}.png')
+                f.savefig(plot_file_name+f'_{plot_type}_{list_quant[i]}_{EoS}_EoS.png')
                 f.clf()
                 pl.close(f)
 
-        if(method=='all' or method=='yields'):
-            make_plot_chi2(result['chi2_yields'],fit_yields,'yields')
-        if(method=='all' or method=='ratios'):
-            make_plot_chi2(result['chi2_ratios'],fit_ratios,'ratios')
+        if((EoS=='all' or EoS=='full') and (method=='all' or method=='yields')):
+            make_plot_chi2(result['chi2_yields'],fit_yields,'yields','full')
+        if((EoS=='all' or EoS=='full') and (method=='all' or method=='ratios')):
+            make_plot_chi2(result['chi2_ratios'],fit_ratios,'ratios','full')
+        if((EoS=='all' or EoS=='nS0') and (method=='all' or method=='yields')):
+            make_plot_chi2(result['chi2_yields_nS0'],fit_yields,'yields','nS0')
+        if((EoS=='all' or EoS=='nS0') and (method=='all' or method=='ratios')):
+            make_plot_chi2(result['chi2_ratios_nS0'],fit_ratios,'ratios','nS0')
 
-    return {'fit_yields':fit_yields,'fit_ratios':fit_ratios,'snB_yields':snB_yields,'snB_ratios':snB_ratios}
+    return {'fit_yields':fit_yields,'fit_ratios':fit_ratios,'snB_yields':snB_yields,'snB_ratios':snB_ratios,\
+            'fit_yields_nS0':fit_yields_nS0,'fit_ratios_nS0':fit_ratios_nS0,'snB_yields_nS0':snB_yields_nS0,'snB_ratios_nS0':snB_ratios_nS0}
 
 ###############################################################################
 if __name__ == "__main__":
