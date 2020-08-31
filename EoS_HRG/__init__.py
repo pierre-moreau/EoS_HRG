@@ -20,7 +20,10 @@ def to_particle(list_name):
     Convert a list of particle names to a list of particle objects
     """
     if not(isinstance(list_name, list)):
-        list_part = Particle.find(lambda p: p.name==list_name)
+        try:
+            list_part = Particle.find(lambda p: p.name==list_name)
+        except:
+            list_part = Particle.findall(lambda p: p.name==list_name)[0]
     else:
         list_part = [None]*len(list_name)
         for i,part in enumerate(list_name):
@@ -77,7 +80,11 @@ def mass(particle):
     """
     mass of a particle object, in GeV
     """
-    return particle.mass/1000. # convert particle mass in GeV
+    try:
+        xmass = particle.mass/1000. # convert particle mass in GeV
+    except:
+        xmass = 0.
+    return xmass
 
 def width(particle):
     """
