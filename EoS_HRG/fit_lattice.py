@@ -178,7 +178,7 @@ def param(T,muB,muQ,muS):
         e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
     
     # if the input is a list of temperature values
-    elif(isinstance(e,np.ndarray) or isinstance(e,list)):
+    elif(isinstance(T,np.ndarray) or isinstance(T,list)):
         p = np.zeros_like(T)
         s = np.zeros_like(T)
         nB = np.zeros_like(T)
