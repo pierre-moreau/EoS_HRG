@@ -44,15 +44,17 @@ def plot_lattice(EoS,tab):
                 first_legend = ax[iq].legend([latticeplot],['lQCD'], bbox_to_anchor=(0.975, 0.075), loc='center right', borderaxespad=0., frameon=False)
                 f[iq].gca().add_artist(first_legend)
 
+    dict_plots = {}
     for iq,quant in enumerate(list_quant):
         if(quant=='n_B' or quant=='s'):
             ylabel = '$'+quant+'/T^3$'
         else:
             ylabel = '$'+quant+'/T^4$'
         ax[iq].set(xlabel='T [GeV]', ylabel=ylabel, title=title)
-        
-    # return array of plots
-    return f,ax
+        # return dict of plots
+        dict_plots.update({quant:[f[iq],ax[iq]]})
+
+    return dict_plots
 
 ###############################################################################
 def plot_lattice_all(EoS,muB):
@@ -143,7 +145,7 @@ def main(EoS,tab):
     list_quant = ["P","n_B","s","e"]
 
     # initialize plots for each quantity with lattice data
-    f, ax = plot_lattice(EoS,tab)
+    dict_plots = plot_lattice(EoS,tab)
 
     # get the range of lattice data in T to plot the parametrization
     xval = np.linspace(Tmin,Tmax,args.Npoints)
@@ -159,14 +161,14 @@ def main(EoS,tab):
         for i,quant in enumerate(list_quant):
             if(quant=='n_B' and j == 0): # don't plot n_B for \mu_B = 0
                 continue
-            ax[i].plot(xval,paramdata[quant],'--', ms='8', color=color, label=r'$ \mu_B = $'+str(muB)+' GeV')
-            ax[i].legend(bbox_to_anchor=(0.6, 0.5),title='Parametrization', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
+            dict_plots[quant][1].plot(xval,paramdata[quant],'--', ms='8', color=color, label=r'$ \mu_B = $'+str(muB)+' GeV')
+            dict_plots[quant][1].legend(bbox_to_anchor=(0.6, 0.5),title='Parametrization', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
 
             # when last value of \mu_B is reached, export plot
             if(j==len(tab)-1):
-                f[i].savefig(f"{dir_path}/lQCD_{EoS}_{quant}_T.png")
-                f[i].clf()
-                pl.close(f[i])
+                dict_plots[quant][0].savefig(f"{dir_path}/lQCD_{EoS}_{quant}_T.png")
+                dict_plots[quant][0].clf()
+                pl.close(dict_plots[quant][0])
 
         # output data for each \mu_B
         if(args.output):

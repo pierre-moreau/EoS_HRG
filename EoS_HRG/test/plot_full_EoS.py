@@ -63,7 +63,7 @@ def main(EoS,tab):
     # quantities to plot/output
     list_quant = ['P','n_B','s','e']
     # initialize plots with lattice data
-    f,ax = plot_lattice(EoS,tab)
+    dict_plots = plot_lattice(EoS,tab)
 
     # initialize temperature values
     xtemp = np.linspace(Tmin,Tmax,args.Npoints)
@@ -80,8 +80,8 @@ def main(EoS,tab):
         for ipl,quant in enumerate(list_quant):
             if(quant=='n_B' and muB==0.): # don't plot for n_B when \mu_B=0
                 continue
-            ax[ipl].plot(xtemp,yval[quant], color=color, linewidth='2.5', label=r'$ \mu_B = $'+str(muB)+' GeV')
-            ax[ipl].legend(bbox_to_anchor=(0.6, 0.5),title='HRG+lQCD', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
+            dict_plots[quant][1].plot(xtemp,yval[quant], color=color, linewidth='2.5', label=r'$ \mu_B = $'+str(muB)+' GeV')
+            dict_plots[quant][1].legend(bbox_to_anchor=(0.6, 0.5),title='HRG+lQCD', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
         
         # output data
         if(args.output):
@@ -94,11 +94,11 @@ def main(EoS,tab):
 
     # for each plot, adapt the range in (x,y) and export
     for ipl,quant in enumerate(list_quant):
-        ax[ipl].set_xlim(Tmin,Tmax)
-        ax[ipl].set_ylim(0.,)
-        f[ipl].savefig(f"{dir_path}/fullEoS_{quant}_T_{EoS}.png")
-        f[ipl].clf()
-        pl.close(f[ipl])
+        dict_plots[quant][1].set_xlim(Tmin,Tmax)
+        dict_plots[quant][1].set_ylim(0.,)
+        dict_plots[quant][0].savefig(f"{dir_path}/fullEoS_{quant}_T_{EoS}.png")
+        dict_plots[quant][0].clf()
+        pl.close(dict_plots[quant][0])
         
 
 ########################################################################

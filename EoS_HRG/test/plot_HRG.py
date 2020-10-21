@@ -58,7 +58,7 @@ def main(EoS,tab):
     # quantities to plot
     list_quant = ['P','n_B','s','e']
     # initialize plots with lattice data
-    f,ax = plot_lattice(EoS,tab)
+    dict_plots = plot_lattice(EoS,tab)
 
     # initialize values of T to evaluate
     xtemp = np.linspace(Tmin,Tmax,args.Npoints)
@@ -75,10 +75,10 @@ def main(EoS,tab):
                 continue
             # plot HRG EoS with solid line below Tc
             cond = xtemp <= Tc_lattice(muB)
-            ax[ipl].plot(xtemp[cond],yval[quant][cond], color=color, linewidth='2.5', label=r'$ \mu_B = $'+str(muB)+' GeV')
+            dict_plots[quant][1].plot(xtemp[cond],yval[quant][cond], color=color, linewidth='2.5', label=r'$ \mu_B = $'+str(muB)+' GeV')
             # plot HRG EoS with dashed line above Tc
-            ax[ipl].plot(xtemp,yval[quant], '--', color=color, linewidth='2.5')
-            ax[ipl].legend(bbox_to_anchor=(0.05, 0.75),title='PHSD HRG', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
+            dict_plots[quant][1].plot(xtemp,yval[quant], '--', color=color, linewidth='2.5')
+            dict_plots[quant][1].legend(bbox_to_anchor=(0.05, 0.75),title='PHSD HRG', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
 
         # output data
         if(args.output):
@@ -107,11 +107,11 @@ def main(EoS,tab):
     max_val = getmax()
     # for each plot, adapt range in (x,y) and export
     for ipl,quant in enumerate(list_quant):
-        ax[ipl].set_xlim(Tmin,Tmax)
-        ax[ipl].set_ylim(0.,max_val[quant])
-        f[ipl].savefig(f"{dir_path}/HRG_{quant}_T_{EoS}{species_out}.png")
-        f[ipl].clf()
-        pl.close(f[ipl])
+        dict_plots[quant][1].set_xlim(Tmin,Tmax)
+        dict_plots[quant][1].set_ylim(0.,max_val[quant])
+        dict_plots[quant][0].savefig(f"{dir_path}/HRG_{quant}_T_{EoS}{species_out}.png")
+        dict_plots[quant][0].clf()
+        pl.close(dict_plots[quant][0])
 
     def plot_species(EoS,muB):
         """
