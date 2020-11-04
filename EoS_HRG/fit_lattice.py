@@ -1,6 +1,6 @@
 import numpy as np
-import pandas as pd 
-from math import factorial
+import pandas as pd
+from math import factorial, pi
 import scipy.optimize
 import scipy.misc
 import os
@@ -40,37 +40,78 @@ Calculation of the equation of state under the conditions: <n_S> = 0 ; <n_Q> = f
         formatter_class=argparse.RawTextHelpFormatter
     )
     args = parser.parse_args()
+    
+###############################################################################
+# J. Phys.: Conf. Ser. 1602 012011
+# critical temperature from lattice at \mu_B = 0
+Tc0 = 0.158 
+# expansion coefficients of T_c(\mu_B)
+kappa2 = 0.0153
+kappa4 = 0.00032 
+###############################################################################
+def Tc_lattice(muB):
+    """
+    Critical temperature as a function of muB from lQCD
+    J. Phys.: Conf. Ser. 1602 012011
+    """   
+    return Tc0*(1.-kappa2*(muB/Tc0)**2.-kappa4*(muB/Tc0)**4.)
 
 ###############################################################################
-# import data from lattice at muB = 0
-###############################################################################
-WB_EoS0 = pd.read_csv(dir_path+"/data/WB-EoS_muB0.csv", skiprows=1).to_dict('list')
-for chi in WB_EoS0:
-    WB_EoS0[chi] = np.array(WB_EoS0[chi])
-    
+def dTcdmuB_lattice(muB):
+    """
+    Derivative of the critical temperature wrt \mu_B
+    """
+    dTc = -2.*muB*kappa2/Tc0 -4.*(muB**3.)*kappa4/Tc0**3.
+    return dTc
+
 ###############################################################################
 # import data for the parametrization of susceptibilities
 ###############################################################################
 
-param_chi_a = pd.read_csv(dir_path+"/data/chi_a.csv", skiprows=1)
+param_chi_a = pd.read_csv(dir_path+"/data/chi_a.csv").to_dict(orient='list')
 chi_a = {}
+# scan rows for each chi
 for i,chi in enumerate(param_chi_a['chi']):
-    values = np.zeros(len(param_chi_a)-1)
+    values = []
+    # scan columns with coefficients
     for j,coeff in enumerate(param_chi_a):
+        # skip first column which is chi string
         if(coeff=='chi'):
             continue
-        values[j-1] = param_chi_a[coeff][i]
-    chi_a[chi] = values
-    
-param_chi_b = pd.read_csv(dir_path+"/data/chi_b.csv", skiprows=1)
+        # append values
+        values.append(param_chi_a[coeff][i])
+    # convert to numpy array
+    chi_a[chi] = np.array(values)
+
+param_chi_b = pd.read_csv(dir_path+"/data/chi_b.csv").to_dict(orient='list')
 chi_b = {}
+# scan rows for each chi
 for i,chi in enumerate(param_chi_b['chi']):
-    values = np.zeros(len(param_chi_b)-1)
+    values = []
+    # scan columns with coefficients
     for j,coeff in enumerate(param_chi_b):
+        # skip first column which is chi string
         if(coeff=='chi'):
             continue
-        values[j-1] = param_chi_b[coeff][i]
-    chi_b[chi] = values
+        # append values
+        values.append(param_chi_b[coeff][i])
+    # convert to numpy array
+    chi_b[chi] = np.array(values)
+
+# list of all susceptibilities
+list_chi = list(param_chi_a['chi'])
+
+########################################################################
+# Stefan Boltzmann limit for the susceptibilities
+# can be found in PhysRevC.100.064910
+chi_SB = dict(zip(list_chi,[19.*pi**2./36.,\
+    1./3.,2./3.,1.,\
+    0.,-1./3.,1./3.,\
+    2./(9.*pi**2.),4./(3*pi**2.),6./pi**2.,\
+    0.,-2./(9.*pi**2.),2./(9.*pi**2.),\
+    4./(9.*pi**2.),-2./pi**2.,2./pi**2.,\
+    4./(9.*pi**2.),2./(3.*pi**2.),2./(3.*pi**2.),\
+    2./(9.*pi**2.),-2./(9.*pi**2.),-2./(3.*pi**2.)]))
 
 ########################################################################
 def param_chi(T,quant):
@@ -79,48 +120,19 @@ def param_chi(T,quant):
     Ex: param_chi(T,'chiBQS121')
     input quant is a string with the format: chiBQS121
     input T being a list or a float
-    Parametrizations from: PhysRevC.100.064910
     """
-    if(quant!='chiB2'):
-        tt = T/0.154
-        numerator = sum([ai/(tt)**i for i,ai in enumerate(chi_a[quant])])
-        denominator = sum([bi/(tt)**i for i,bi in enumerate(chi_b[quant][:-1])])
-        c0 = chi_b[quant][-1]
-        param_chi = numerator/denominator + c0
-    else:
-    # for chiB2, other parametrization
-        tt = T/0.2
-        h1 = -0.325372
-        h2 = 0.497729
-        f3 = 0.148987
-        f4 = 6.66388
-        f5 = -5.07725
-        param_chi = np.exp(-h1/tt-h2/tt**2.)*f3*(1.+np.tanh(f4*tt+f5))
-    return param_chi
-
-########################################################################
-# list of all susceptibilities
-list_chi = list(param_chi_a['chi'])
-list_chi.append('chiB2')
-
-"""
-########################################################################
-# test and plot parametrization of each susceptibility
-xtemp = np.linspace(0.00001,0.6,100)
-for chi in list_chi:
-    f,ax = pl.subplots(figsize=(10,7))
-    y_chi = param_chi(xtemp,chi)
-    ax.plot(xtemp,y_chi)
-    ax.set(xlabel='T [GeV]',ylabel=chi)
-    f.savefig(f'{dir_path}/{chi}.png')
-    pl.show()
-"""
+    tt = T/Tc_lattice(0.)
+    numerator = sum([ai/(tt)**i for i,ai in enumerate(chi_a[quant])])
+    denominator = sum([bi/(tt)**i for i,bi in enumerate(chi_b[quant])])
+    c0 = chi_SB[quant]-chi_a[quant][0]/chi_b[quant][0]
+    return numerator/denominator + c0
 
 ########################################################################
 # for each susceptibility, get the order of the derivative wrt B,Q,S
 ########################################################################
 
-BQS = dict(zip(list_chi,[{'B': 0., 'Q': 0., 'S': 0.} for i in range(len(list_chi))]))
+BQS = dict(zip(list_chi,[{'B': 0, 'Q': 0, 'S': 0} for i in range(len(list_chi))]))
+chi_latex = {'chi0':r'$\chi_0$'}
 for chi in list_chi:
     # derivatives wrt to each charge
     if(chi!='chi0'):
@@ -128,6 +140,7 @@ for chi in list_chi:
         chi_match = re.match('chi([A-Z]+)([0-9]+)', chi)
         list_charge = list(chi_match.group(1)) # contains the charges
         list_der = list(chi_match.group(2)) # contains the derivatives
+        chi_latex.update({chi:r'$\chi^{'+"".join(list_charge)+'}_{'+"".join(list_der)+'}$'})
         for ich,xcharge in enumerate(list_charge):
             BQS[chi][xcharge] = int(list_der[ich]) # match each charge to its derivative
 
@@ -136,7 +149,6 @@ def param(T,muB,muQ,muS):
     """
     Parametrization of thermodynamic quantities from lQCD
     as a function of T, \mu_B, \mu_Q, \mu_S
-    Parametrization from: PhysRevC.100.064910
     """
     # if input is a single temperature value T
     if(isinstance(T,float)):
@@ -200,26 +212,55 @@ def param(T,muB,muQ,muS):
     return {'T': T,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
 
 ###############################################################################
-# critical temperature from lattice at \mu_B = 0
-Tc0 = 0.158 
-# expansion coefficients of T_c(\mu_B)
-kappa2 = 0.015
-kappa4 = 0.
+# import data from lattice at muB = 0
 ###############################################################################
-def Tc_lattice(muB):
-    """
-    Critical temperature as a function of muB
-    """
-    # lattice evaluation of Tc(muB)
-    return Tc0*(1.-kappa2*(muB/Tc0)**2.-kappa4*(muB/Tc0)**4.)
 
-###############################################################################
-def dTcdmuB_lattice(muB):
-    """
-    Derivative of the critical temperature wrt \mu_B
-    """
-    dTc = -2.*muB*kappa2/Tc0 -4.*(muB**3.)*kappa4/Tc0**3.
-    return dTc
+# read chi0 
+WB_EoS0 = pd.read_csv(dir_path+"/data/WB-EoS_muB0_j.physletb.2014.01.007.csv").to_dict(orient='list')
+chi_lattice2014 = {'chi0':np.array(list(zip(WB_EoS0['T'],WB_EoS0['P'],WB_EoS0['P_err'])))}
+# save all other thermodynamic quantities
+for chi in WB_EoS0:
+    WB_EoS0[chi] = np.array(WB_EoS0[chi])
+# read data from 2012 (chiB2,chiQ2,chiS2)
+chi_lattice2012 = {}
+try:
+    df = pd.read_csv(dir_path+"/data/WB_chi_T_JHEP01(2012)138.csv").to_dict(orient='list')
+    for entry in df:
+        if(entry=='T' or '_err' in entry):
+            continue
+        chi_lattice2012.update({entry:np.array(list(zip(df['T'],df[entry],df[entry+'_err'])))})
+except:
+    pass
+# read data from 2015 (chiB2,chiB4,chiS2)
+chi_lattice2015 = {}
+try:
+    df = pd.read_csv(dir_path+"/data/WB_chi_T_PhysRevD.92.114505.csv").to_dict(orient='list')
+    for entry in df:
+        if(entry=='T' or '_err' in entry):
+            continue
+        chi_lattice2015.update({entry:np.array([[df['T'][iT],df[entry][iT],df[entry+'_err'][iT]] for iT,_ in enumerate(df[entry]) if np.logical_not(np.isnan(df[entry][iT]))])})
+except:
+    pass
+# read data from 2018
+chi_lattice2018 = {}
+try:
+    df = pd.read_csv(dir_path+"/data/WB_chi_T_JHEP10(2018)205.csv").to_dict(orient='list')
+    for entry in df:
+        if(entry=='T' or '_err' in entry):
+            continue
+        chi_lattice2018.update({entry:np.array(list(zip(df['T'],df[entry],df[entry+'_err'])))})
+except:
+    pass
+# read data from 2020 (chiBQ11,chiBS11,chiQS11)
+chi_lattice2020 = {}
+try:
+    df = pd.read_csv(dir_path+"/data/WB_chi_T_PhysRevD.101.034506.csv").to_dict(orient='list')
+    for entry in df:
+        if(entry=='T' or '_err' in entry):
+            continue
+        chi_lattice2020.update({entry:np.array(list(zip(df['T'],df[entry],df[entry+'_err'])))})
+except:
+    pass
 
 ###############################################################################
 def lattice_data(EoS,muB):

@@ -1,3 +1,4 @@
+import matplotlib
 import matplotlib.pyplot as pl
 import os
 import numpy as np
@@ -6,7 +7,9 @@ import argparse
 # import from __init__.py
 from . import *
 # import the functions to test from fit_lattice.py
-from EoS_HRG.fit_lattice import lattice_data, param, EoS_nS0
+from EoS_HRG.fit_lattice import *
+# susceptibilities from HRG
+from EoS_HRG.HRG import HRG
 
 # directory where the fit_lattice_test.py is located
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -187,11 +190,64 @@ def main(EoS,tab):
         pl.close(fall)
         print('  plot \mu_B = '+str(muB)+' GeV')
 
+@timef
+def plot_chi():
+    """
+    To plot the fit of susceptibilities compared to lQCD results
+    """
+    # values in T for the plot
+    xtemp = np.arange(0.0975,10.,0.001)
+
+    # susceptibilities from HRG
+    xTHRG = np.arange(0.05,0.18,0.001)
+    start = time.time()
+    HRG_chi = HRG(xTHRG,0.,0.,0.,offshell=True)['chi']
+    print(f'{time.time()-start}s')
+
+    # loop over susceptibilities
+    for ichi,chi in enumerate(list_chi):
+        print(chi)
+        f,ax = pl.subplots(figsize=(8,7))
+
+        # loop over lattice data
+        for chi_lattice,point in [[chi_lattice2020,'s'],[chi_lattice2015,'*'],[chi_lattice2014,'^'],[chi_lattice2012,'o'],[chi_lattice2018,'p']]:
+            try:
+                data = chi_lattice[chi]
+                ax.plot(data[:,0], data[:,1], point, color='b', ms='6', fillstyle='none',label='lQCD')
+                ax.errorbar(data[:,0], data[:,1], yerr=data[:,2], fmt='none', color='b')
+                break
+            except:
+                pass
+
+        y_chi = param_chi(xtemp,chi)
+        ax.plot(xtemp,y_chi,color='r',linewidth=2,label='parametrization')
+        # SB limit
+        ax.plot([5,10],chi_SB[chi]*np.ones(2),color='k',linewidth=5,label='SB limit')
+        # susceptibilities from HRG
+        ax.plot(xTHRG,HRG_chi[ichi],'--',color='k',linewidth=2,label='HRG')
+
+        ylimm = 1.1*min(HRG_chi[ichi][0],chi_SB[chi],np.amin(y_chi),np.amin(data[:,1]-data[:,2]))
+        ylimp = 1.1*max(HRG_chi[ichi][0],chi_SB[chi],np.amax(y_chi),np.amax(data[:,1]+data[:,2]))
+        if(ylimm>=0.):
+            ylimm = -0.05*ylimp
+        else:
+            ylimp = max(0.05*abs(ylimm),ylimp)
+        ax.set(xlabel='T [GeV]',ylabel=chi_latex[chi],xscale='log',ylim=[ylimm,ylimp])
+        ax.set_xticks([0.1,0.2,0.3,0.5,1,2,3,5,10])
+        ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+        ax.legend(title=None, title_fontsize='25', loc='best', borderaxespad=0.5, frameon=False)
+        f.savefig(f'{dir_path}/{chi}.png')
+        f.clf()
+        pl.close(f)
+
+
 ###############################################################################
 if __name__ == "__main__":
+    # plot the susceptibilities
+    plot_chi()
+
     # values of \mu_B where to test the parametrization of lQCD data
     tab = [[0.,'r'],[0.2,'tab:orange'],[0.3,'b'],[0.4,'g']]
-
     main('muB',tab)
     main('nS0',tab)
     

@@ -2,17 +2,14 @@ import numpy as np
 import scipy.integrate as integrate
 from scipy.special import kn
 import re
-import math
+from math import pi
 import os
 import argparse
 from iminuit import Minuit
 from iminuit.cost import LeastSquares
-from EoS_HRG.fit_lattice import EoS_nS0
+from EoS_HRG.fit_lattice import EoS_nS0,BQS,list_chi
 # import from __init__.py
 from . import *
-
-# define Pi variable
-Pi = math.pi
 
 # directory where the fit_lattice_test.py is located
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -134,7 +131,7 @@ def BW(m,M0,gamma):
     Breit-Wigner spectral function
     PHYSICAL REVIEW C 98, 034906 (2018)
     """
-    BW = (2.*gamma*M0*m)/((m**2.-M0**2.)**2. + (M0*gamma)**2.)/Pi
+    BW = (2.*gamma*M0*m)/((m**2.-M0**2.)**2. + (M0*gamma)**2.)/pi
     return BW
 
 ########################################################################
@@ -294,6 +291,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
         nS = 0.
         s = 0.
         e = 0.
+        chi = np.zeros(len(list_chi))
         flag_1part = False
         if(species=='all'):
             list_part = HRG_mesons + HRG_baryons
@@ -306,50 +304,54 @@ def HRG(xT,muB,muQ,muS,**kwargs):
             list_part = [to_particle(species)]
             flag_1part = True
         
+        maxk = 10 # max value of k for sum over k
+
         for part in list_part:
+            # initialize quantities for this particle, sum over k
             resultp = 0.
             resultn = 0.
             results = 0.
+            resultpder = np.zeros(2)
 
-            # to account for baryon/antibaryon and meson/antimesons
-            antip = float(has_anti(part))
-            # if just one particle selected, don't count antiparticle contribution
             if(flag_1part):
+                # if just one particle selected, don't count antiparticle contribution
                 antip = 0
+            else:
+                # to account for baryon/antibaryon and meson/antimesons
+                antip = float(has_anti(part))
 
             xmass = mass(part) # pole mass of the particle
-            maxk = 3 # max value of k for sum over k
-            # evaluate if the contribution of the particle is significant or not
-            if(xmass/T>14.):
-                continue
-            elif(xmass/T>6.):
-                maxk = 1
-            elif(xmass/T>3.):
-                maxk = 2
-
-            xmu = muk(part,muB,muQ,muS) + np.log(gammaS**(abs(Scharge(part)))) # chemical potential of the particle           
             xwidth = width(part) # width of the particle
             dg = d_spin(part) # degeneracy factor of the particle
-
-            # precalculate different factors entering thermodynamic quantities
-            fug1 = np.array([np.exp(k*xmu/T) for k in range(0,maxk+1)])
-            fug2 = np.array([np.exp(-k*xmu/T) for k in range(0,maxk+1)])
-            kn2 = np.array([kn(2,k*xmass/T) for k in range(0,maxk+1)])
-            kn1 = np.array([kn(1,k*xmass/T) for k in range(0,maxk+1)])
-            factk = np.array([(-((-1.)**(Bcharge(part)+1.)))**(k+1.) for k in range(0,maxk+1)])
+            xmu = muk(part,muB,muQ,muS) + np.log(gammaS**(abs(Scharge(part)))) # chemical potential of the particle
+            fug = np.exp(xmu/T) # fugacity
+            factB = (-1.)**(Bcharge(part)) # should be -1 for fermions, +1 for bosons
 
             # stable particles
             if(xwidth/xmass <= thres_off or not(offshell)):
 
-                fp = dg/(2.*Pi**2.)*(xmass**2.)*(T**2.)
-                fn = dg/(2.*Pi**2.)*(xmass**2.)*T
-                fs = dg/(2.*Pi**2.)*(xmass**2.) 
-                 
-                resultp += sum([fp*factk[k]/(k**2.)*kn2[k]*(fug1[k]+antip*fug2[k]) for k in range(1,maxk+1)])
-                resultn += sum([fn*factk[k]/k*kn2[k]*(fug1[k]-antip*fug2[k]) for k in range(1,maxk+1)])
-                results += sum([fs*factk[k]/(k**2.)*(fug1[k]*(k*xmass*kn1[k]+(4.*T-k*xmu)*kn2[k]) \
-                 + antip*fug2[k]*(k*xmass*kn1[k]+(4.*T+k*xmu)*kn2[k])) for k in range(1,maxk+1)])
-            
+                # precalculate different factors entering thermodynamic quantities
+                factp = dg/(2.*pi**2.)*(xmass**2.)*(T**2.)
+                facts = dg/(2.*pi**2.)*(xmass**2.)
+
+                for k in range(1,maxk+1):
+                    # precalculate different factors entering thermodynamic quantities
+                    kn2 = kn(2,k*xmass/T)
+
+                    resultpk0 = factp*(factB**(k+1.))/(k**2.)*kn2 # pressure at mu=0
+                    resultpk = resultpk0*(fug**k+antip/fug**k) # pressure finite mu
+
+                    # evaluate if the contribution of the particle is significant or not
+                    if(abs(resultpk/(resultp+resultpk))<=0.01):
+                        break
+
+                    resultp += resultpk
+                    resultpder += resultpk*np.array([k**2.,k**4.])
+                    resultn += resultpk0*k/T*(fug**k-antip/fug**k) 
+                    kn1 = kn(1,k*xmass/T)
+                    results += facts*factB**(k+1.)/(k**2.)*((fug**k)*(k*xmass*kn1+(4.*T-k*xmu)*kn2) \
+                                         + antip/(fug**k)*(k*xmass*kn1+(4.*T+k*xmu)*kn2)) 
+
             # unstable particles, integration over mass, weighted with Breit-Wigner spectral function
             else:
                 mthres = mth_all[part.name]
@@ -363,28 +365,49 @@ def HRG(xT,muB,muQ,muS,**kwargs):
                 # PHYSICAL REVIEW C 98, 034906 (2018)
                 xnorm = norm[part]
 
-                xBW = lambda m : BW(m,xmass,xwidth)
                 # now perform the integration to calculate thermodynamic quantities
-                fp = lambda m,k : xBW(m)*(m**2.)*kn(2,k*m/T)
-                fn = lambda m,k : xBW(m)*(m**2.)*kn(2,k*m/T)
-                fs = lambda m,k : xBW(m)*(m**2.)*(fug1[k]*(k*m*kn(1,k*m/T)+(4.*T-k*xmu)*kn(2,k*m/T)) \
-                    + antip*fug2[k]*(k*m*kn(1,k*m/T)+(4.*T+k*xmu)*kn(2,k*m/T)))
+                def fp(m,k):
+                    return BW(m,xmass,xwidth)*(m**2.)*kn(2,k*m/T)
+                def fs(m,k):
+                    return BW(m,xmass,xwidth)*(m**2.)*((fug**k)*(k*m*kn(1,k*m/T)+(4.*T-k*xmu)*kn(2,k*m/T)) \
+                    + antip/(fug**k)*(k*m*kn(1,k*m/T)+(4.*T+k*xmu)*kn(2,k*m/T)))
 
-                factp = dg/(2.*Pi**2.)*(T**2.)/xnorm
-                factn = dg/(2.*Pi**2.)*T/xnorm
-                facts = dg/(2.*Pi**2.)/xnorm
-                
-                resultp += sum([integrate.quad(fp, mmin, mmax, epsrel=0.01, args=(k))[0]*factp*factk[k]/(k**2.)*(fug1[k]+antip*fug2[k]) for k in range(1,maxk+1)])
-                resultn += sum([integrate.quad(fn, mmin, mmax, epsrel=0.01, args=(k))[0]*factn*factk[k]/k*(fug1[k]-antip*fug2[k]) for k in range(1,maxk+1)])
-                results += sum([integrate.quad(fs, mmin, mmax, epsrel=0.01, args=(k))[0]*facts*factk[k]/(k**2.) for k in range(1,maxk+1)])
-            
+                # precalculate different factors entering thermodynamic quantities
+                factp = dg/(2.*pi**2.)*(T**2.)/xnorm
+                facts = dg/(2.*pi**2.)/xnorm
+
+                for k in range(1,maxk+1):                    
+
+                    resultpk0 = integrate.quad(fp, mmin, mmax, epsrel=0.01, args=(k))[0]*factp*(factB**(k+1.))/(k**2.)
+                    resultpk = resultpk0*((fug**k)+antip/(fug**k))
+
+                    # evaluate if the contribution of the particle is significant or not
+                    if(abs(resultpk/(resultp+resultpk))<=0.01):
+                        break
+
+                    resultp += resultpk
+                    resultpder += resultpk*np.array([k**2.,k**4.]) # derivative wrt (xmu/T)^{2,4} for the susceptibilities
+                    resultn += resultpk0*k/T*(fug**k-antip/fug**k)
+                    results += integrate.quad(fs, mmin, mmax, epsrel=0.01, args=(k))[0]*facts*(factB**(k+1.))/(k**2.)
+
             # dimensioneless quantities
+            # sum over particles
             p += resultp/T**4.
             ndens += resultn/T**3.
-            nB += Bcharge(part)*resultn/T**3.   
-            nQ += Qcharge(part)*resultn/T**3.  
-            nS += Scharge(part)*resultn/T**3.  
-            s += results/T**3.     
+            nB += Bcharge(part)*resultn/T**3.
+            nQ += Qcharge(part)*resultn/T**3.
+            nS += Scharge(part)*resultn/T**3.
+            s += results/T**3.
+
+            for ichi,xchi in enumerate(list_chi):
+                if(ichi==0):
+                    chi[ichi] += resultp/T**4.
+                    continue
+                ii = BQS[xchi]['B']
+                jj = BQS[xchi]['Q']
+                kk = BQS[xchi]['S']
+                factBQS = ((Bcharge(part))**ii)*((Qcharge(part))**jj)*((Scharge(part))**kk)
+                chi[ichi] += factBQS*resultpder[int((ii+jj+kk)/2-1)]/T**4.
         
         e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
     
@@ -397,6 +420,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
         nQ = np.zeros_like(xT)
         nS = np.zeros_like(xT)
         e = np.zeros_like(xT)
+        chi = np.zeros((len(list_chi),len(xT)))
         for i,T in enumerate(xT):
             # see if arrays are also given for chemical potentials
             try:
@@ -419,11 +443,12 @@ def HRG(xT,muB,muQ,muS,**kwargs):
             nQ[i] = result['n_Q']
             nS[i] = result['n_S']
             e[i] = result['e']
+            chi[:,i] = result['chi']
 
     else:
         raise Exception('Problem with input')
     
-    return {'T': xT,'P':p, 's':s, 'n':ndens, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
+    return {'T': xT,'P':p, 's':s, 'n':ndens, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e, 'chi':chi}
 
 ########################################################################
 def HRG_freezout(T,muB,muQ,muS,gammaS,EoS='full',**kwargs):

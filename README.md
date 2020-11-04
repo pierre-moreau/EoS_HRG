@@ -1,6 +1,6 @@
 # EoS_HRG
 
-Equation of state (EoS) from a matching between lattice QCD (lQCD) and the Hadron Resonance Gas model (HRG). The reference to the lattice QCD parametrization of susceptibilities can be found in [Phys. Rev. C 100, 064910](https://journals.aps.org/prc/abstract/10.1103/PhysRevC.100.064910), and to the matching procedure in [Phys. Rev. C 100, 024907](https://journals.aps.org/prc/abstract/10.1103/PhysRevC.100.024907).
+Equation of state (EoS) from a matching between lattice QCD (lQCD) and the Hadron Resonance Gas model (HRG). The parametrizations of lattice QCD susceptibilities is adapted from [Phys. Rev. C 100, 064910](https://journals.aps.org/prc/abstract/10.1103/PhysRevC.100.064910), and the matching procedure is based on [Phys. Rev. C 100, 024907](https://journals.aps.org/prc/abstract/10.1103/PhysRevC.100.024907).
 
 ## Basic usage
 

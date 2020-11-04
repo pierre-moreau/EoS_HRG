@@ -1,11 +1,11 @@
 """
 Equation of state (EoS) from a matching between lattice QCD (lQCD) and the Hadron Resonance Gas model (HRG). 
-The reference to the lattice QCD parametrization of susceptibilities can be found in Phys. Rev. C 100, 064910, 
-and to the matching procedure in Phys. Rev. C 100, 024907.
+The parametrization of the lattice QCD susceptibilities is adapted from Phys. Rev. C 100, 064910, 
+and the matching procedure is based on Phys. Rev. C 100, 024907.
 Possibility to fit HRG parameters to final heavy-ion particle yields.
 """
 
-__version__ = '1.1.0'
+__version__ = '2.0.0'
 
 # import decay data here
 import re

@@ -358,10 +358,8 @@ if __name__ == "__main__":
     # values of \mu_B where to test the parametrization of lQCD data
     tab = [[0.,'r'],[0.2,'tab:orange'],[0.3,'b'],[0.4,'g']]
 
-    """
     main('muB',tab)
     main('nS0',tab)
-    """
     
     # BES STAR data, for tests (PHYSICAL REVIEW C 96, 044904 (2017))
     # just the pions and Lambdas are corrected for feed-down weak decays
