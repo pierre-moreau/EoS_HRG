@@ -201,7 +201,7 @@ def plot_chi():
     # susceptibilities from HRG
     xTHRG = np.arange(0.05,0.18,0.001)
     start = time.time()
-    HRG_chi = HRG(xTHRG,0.,0.,0.,offshell=True)['chi']
+    HRG_chi = HRG(xTHRG,0.,0.,0.,offshell=True,eval_chi=True)['chi']
     print(f'{time.time()-start}s')
 
     # loop over susceptibilities

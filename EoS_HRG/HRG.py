@@ -270,6 +270,12 @@ def HRG(xT,muB,muQ,muS,**kwargs):
     except:
         offshell = False # default
 
+    # evaluate susceptibilities as well?
+    try:
+        eval_chi = kwargs['eval_chi']
+    except:
+        eval_chi = False # default
+
     # strangeness suppression factor?
     try:
         gammaS = kwargs['gammaS']
@@ -346,7 +352,8 @@ def HRG(xT,muB,muQ,muS,**kwargs):
                         break
 
                     resultp += resultpk
-                    resultpder += resultpk*np.array([k**2.,k**4.])
+                    if(eval_chi):
+                        resultpder += resultpk*np.array([k**2.,k**4.])
                     resultn += resultpk0*k/T*(fug**k-antip/fug**k) 
                     kn1 = kn(1,k*xmass/T)
                     results += facts*factB**(k+1.)/(k**2.)*((fug**k)*(k*xmass*kn1+(4.*T-k*xmu)*kn2) \
@@ -376,7 +383,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
                 factp = dg/(2.*pi**2.)*(T**2.)/xnorm
                 facts = dg/(2.*pi**2.)/xnorm
 
-                for k in range(1,maxk+1):                    
+                for k in range(1,maxk+1):
 
                     resultpk0 = integrate.quad(fp, mmin, mmax, epsrel=0.01, args=(k))[0]*factp*(factB**(k+1.))/(k**2.)
                     resultpk = resultpk0*((fug**k)+antip/(fug**k))
@@ -386,7 +393,8 @@ def HRG(xT,muB,muQ,muS,**kwargs):
                         break
 
                     resultp += resultpk
-                    resultpder += resultpk*np.array([k**2.,k**4.]) # derivative wrt (xmu/T)^{2,4} for the susceptibilities
+                    if(eval_chi):
+                        resultpder += resultpk*np.array([k**2.,k**4.]) # derivative wrt (xmu/T)^{2,4} for the susceptibilities
                     resultn += resultpk0*k/T*(fug**k-antip/fug**k)
                     results += integrate.quad(fs, mmin, mmax, epsrel=0.01, args=(k))[0]*facts*(factB**(k+1.))/(k**2.)
 
@@ -399,16 +407,17 @@ def HRG(xT,muB,muQ,muS,**kwargs):
             nS += Scharge(part)*resultn/T**3.
             s += results/T**3.
 
-            for ichi,xchi in enumerate(list_chi):
-                if(ichi==0):
-                    chi[ichi] += resultp/T**4.
-                    continue
-                ii = BQS[xchi]['B']
-                jj = BQS[xchi]['Q']
-                kk = BQS[xchi]['S']
-                factBQS = ((Bcharge(part))**ii)*((Qcharge(part))**jj)*((Scharge(part))**kk)
-                chi[ichi] += factBQS*resultpder[int((ii+jj+kk)/2-1)]/T**4.
-        
+            if(eval_chi):
+                for ichi,xchi in enumerate(list_chi):
+                    if(ichi==0):
+                        chi[ichi] += resultp/T**4.
+                        continue
+                    ii = BQS[xchi]['B']
+                    jj = BQS[xchi]['Q']
+                    kk = BQS[xchi]['S']
+                    factBQS = ((Bcharge(part))**ii)*((Qcharge(part))**jj)*((Scharge(part))**kk)
+                    chi[ichi] += factBQS*resultpder[int((ii+jj+kk)/2-1)]/T**4.
+
         e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
     
     # if the temperature input is a list
