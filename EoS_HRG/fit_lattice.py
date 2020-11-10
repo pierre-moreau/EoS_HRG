@@ -80,8 +80,7 @@ for i,chi in enumerate(param_chi_a['chi']):
             continue
         # append values
         values.append(param_chi_a[coeff][i])
-    # convert to numpy array
-    chi_a[chi] = np.array(values)
+    chi_a[chi] = values
 
 param_chi_b = pd.read_csv(dir_path+"/data/chi_b.csv").to_dict(orient='list')
 chi_b = {}
@@ -95,8 +94,7 @@ for i,chi in enumerate(param_chi_b['chi']):
             continue
         # append values
         values.append(param_chi_b[coeff][i])
-    # convert to numpy array
-    chi_b[chi] = np.array(values)
+    chi_b[chi] = values
 
 # list of all susceptibilities
 list_chi = list(param_chi_a['chi'])
@@ -159,31 +157,36 @@ def param(T,muB,muQ,muS):
         s = 0.
         e = 0.
 
-        for chi in list_chi:
-            i = BQS[chi]['B']
-            j = BQS[chi]['Q']
-            k = BQS[chi]['S']
-            fact = 1./(factorial(i)*factorial(j)*factorial(k))
-            xchi = param_chi(T,chi)
-            pow_muB = ((muB/T)**i)
-            pow_muQ = ((muQ/T)**j)
-            pow_muS = ((muS/T)**k)
-            # pressure P/T^4
-            p += fact*xchi*pow_muB*pow_muQ*pow_muS
-            # baryon density n_B/T^3 when i > 1
-            if(i >= 1):
-                nB += fact*xchi*i*((muB/T)**(i-1.))*pow_muQ*pow_muS
-            # charge density n_Q/T^3 when i > 1
-            if(j >= 1):
-                nQ += fact*xchi*pow_muB*j*((muQ/T)**(j-1.))*pow_muS
-            # strangeness density n_S/T^3 when k > 1
-            if(k >= 1):
-                nS += fact*xchi*pow_muB*pow_muQ*k*((muS/T)**(k-1.))
-            # derivative of the susceptibility wrt temperature
-            der = scipy.misc.derivative(lambda xT : param_chi(xT,chi),T,dx=1e-5)
-            # s/T^3 = T d(P/T^4)/d(T) + 4 P/T^4
-            # here we add just the 1st part
-            s += fact*(T*der-(i+j+k)*xchi)*pow_muB*pow_muQ*pow_muS
+        if(muB==0. and muQ==0. and muS == 0.):
+            p = param_chi(T,'chi0')
+            der = scipy.misc.derivative(param_chi,T,dx=1e-5,args=('chi0',))
+            s = T*der
+        else:
+            for chi in list_chi:
+                i = BQS[chi]['B']
+                j = BQS[chi]['Q']
+                k = BQS[chi]['S']
+                fact = 1./(factorial(i)*factorial(j)*factorial(k))
+                xchi = param_chi(T,chi)
+                pow_muB = ((muB/T)**i)
+                pow_muQ = ((muQ/T)**j)
+                pow_muS = ((muS/T)**k)
+                # pressure P/T^4
+                p += fact*xchi*pow_muB*pow_muQ*pow_muS
+                # baryon density n_B/T^3 when i > 1
+                if(i >= 1):
+                    nB += fact*xchi*i*((muB/T)**(i-1.))*pow_muQ*pow_muS
+                # charge density n_Q/T^3 when i > 1
+                if(j >= 1):
+                    nQ += fact*xchi*pow_muB*j*((muQ/T)**(j-1.))*pow_muS
+                # strangeness density n_S/T^3 when k > 1
+                if(k >= 1):
+                    nS += fact*xchi*pow_muB*pow_muQ*k*((muS/T)**(k-1.))
+                # derivative of the susceptibility wrt temperature
+                der = scipy.misc.derivative(param_chi,T,dx=1e-5,args=(chi,))
+                # s/T^3 = T d(P/T^4)/d(T) + 4 P/T^4
+                # here we add just the 1st part
+                s += fact*(T*der-(i+j+k)*xchi)*pow_muB*pow_muQ*pow_muS
         # add 2nd piece to s/T^3
         s += 4.*p
         # energy density e/T^4
