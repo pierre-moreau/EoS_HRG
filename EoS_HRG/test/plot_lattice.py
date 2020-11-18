@@ -3,6 +3,7 @@ import matplotlib.pyplot as pl
 import os
 import numpy as np
 import argparse
+from math import factorial
 
 # import from __init__.py
 from . import *
@@ -199,22 +200,25 @@ def plot_chi():
     xtemp = np.arange(0.0975,10.,0.001)
 
     # susceptibilities from HRG
-    xTHRG = np.arange(0.05,0.18,0.001)
-    start = time.time()
+    xTHRG = np.arange(0.05,0.18,0.01)
     HRG_chi = HRG(xTHRG,0.,0.,0.,offshell=True,eval_chi=True)['chi']
-    print(f'{time.time()-start}s')
+    HRG_chi_nS0 = EoS_nS0(HRG,xTHRG,0.,offshell=True,eval_chi=True)['chi']
 
     # loop over susceptibilities
-    for ichi,chi in enumerate(list_chi):
+    for ichi,chi in enumerate(list_chi+list_chi_nS0):
         print(chi)
         f,ax = pl.subplots(figsize=(8,7))
 
         # loop over lattice data
-        for chi_lattice,point in [[chi_lattice2020,'s'],[chi_lattice2015,'*'],[chi_lattice2014,'^'],[chi_lattice2012,'o'],[chi_lattice2018,'p']]:
+        for chi_lattice,point in [[chi_lattice2020,'s'],[chi_lattice2015,'*'],[chi_lattice2014,'^'],[chi_lattice2012,'o'],[chi_lattice2018,'p'],[chi_lattice2017,'P']]:
             try:
                 data = chi_lattice[chi]
-                ax.plot(data[:,0], data[:,1], point, color='b', ms='6', fillstyle='none',label='lQCD')
-                ax.errorbar(data[:,0], data[:,1], yerr=data[:,2], fmt='none', color='b')
+                if(chi!='chiQ4'):
+                    ax.plot(data[:,0], data[:,1], point, color='b', ms='6', fillstyle='none',label='lQCD')
+                    ax.errorbar(data[:,0], data[:,1], yerr=data[:,2], fmt='none', color='b')
+                else:
+                    ax.plot(data[3:,0], data[3:,1], point, color='b', ms='6', fillstyle='none',label='lQCD')
+                    ax.errorbar(data[3:,0], data[3:,1], yerr=data[3:,2], fmt='none', color='b')
                 break
             except:
                 pass
@@ -222,12 +226,25 @@ def plot_chi():
         y_chi = param_chi(xtemp,chi)
         ax.plot(xtemp,y_chi,color='r',linewidth=2,label='parametrization')
         # SB limit
-        ax.plot([5,10],chi_SB[chi]*np.ones(2),color='k',linewidth=5,label='SB limit')
-        # susceptibilities from HRG
-        ax.plot(xTHRG,HRG_chi[ichi],'--',color='k',linewidth=2,label='HRG')
+        if(not 'nS0' in chi):
+            ax.plot([5,10],chi_SB[chi]*np.ones(2),color='k',linewidth=5,label='SB limit')
+            # susceptibilities from HRG
+            ax.plot(xTHRG,HRG_chi[ichi],'--',color='k',linewidth=2,label='HRG')
+            ylimm = 1.1*min(HRG_chi[ichi][0],chi_SB[chi],np.amin(y_chi),np.amin(data[:,1]-data[:,2]))
+            ylimp = 1.1*max(HRG_chi[ichi][0],chi_SB[chi],np.amax(y_chi),np.amax(data[:,1]+data[:,2]))
+        else:
+            ax.plot([5,10],chi_SB[chi]*np.ones(2),linestyle='dotted',color='k',linewidth=5,label=r'limit $T \rightarrow \infty$')
+            # susceptibilities from HRG
+            if(chi=='chiB2_nS0'):
+                ichi = 1
+                fact = factorial(2)
+            elif(chi=='chiB4_nS0'):
+                ichi = 7
+                fact = factorial(4)
+            ax.plot(xTHRG,HRG_chi_nS0[ichi]/fact,'--',color='k',linewidth=2,label='HRG')
+            ylimm = 1.1*min(HRG_chi_nS0[ichi][0]/fact,chi_SB[chi],np.amin(y_chi),np.amin(data[:,1]-data[:,2]))
+            ylimp = 1.1*max(HRG_chi_nS0[ichi][0]/fact,chi_SB[chi],np.amax(y_chi),np.amax(data[:,1]+data[:,2]))
 
-        ylimm = 1.1*min(HRG_chi[ichi][0],chi_SB[chi],np.amin(y_chi),np.amin(data[:,1]-data[:,2]))
-        ylimp = 1.1*max(HRG_chi[ichi][0],chi_SB[chi],np.amax(y_chi),np.amax(data[:,1]+data[:,2]))
         if(ylimm>=0.):
             ylimm = -0.05*ylimp
         else:

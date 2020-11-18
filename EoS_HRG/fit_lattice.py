@@ -68,36 +68,39 @@ def dTcdmuB_lattice(muB):
 # import data for the parametrization of susceptibilities
 ###############################################################################
 
-param_chi_a = pd.read_csv(dir_path+"/data/chi_a.csv").to_dict(orient='list')
 chi_a = {}
-# scan rows for each chi
-for i,chi in enumerate(param_chi_a['chi']):
-    values = []
-    # scan columns with coefficients
-    for j,coeff in enumerate(param_chi_a):
-        # skip first column which is chi string
-        if(coeff=='chi'):
-            continue
-        # append values
-        values.append(param_chi_a[coeff][i])
-    chi_a[chi] = values
+for chi_file in ["/data/chi_a_nS0.csv","/data/chi_a.csv"]:
+    param_chi_a = pd.read_csv(dir_path+chi_file).to_dict(orient='list')
+    # scan rows for each chi
+    for i,chi in enumerate(param_chi_a['chi']):
+        values = []
+        # scan columns with coefficients
+        for j,coeff in enumerate(param_chi_a):
+            # skip first column which is chi string
+            if(coeff=='chi'):
+                continue
+            # append values
+            values.append(param_chi_a[coeff][i])
+        chi_a.update({chi:values})
 
-param_chi_b = pd.read_csv(dir_path+"/data/chi_b.csv").to_dict(orient='list')
 chi_b = {}
-# scan rows for each chi
-for i,chi in enumerate(param_chi_b['chi']):
-    values = []
-    # scan columns with coefficients
-    for j,coeff in enumerate(param_chi_b):
-        # skip first column which is chi string
-        if(coeff=='chi'):
-            continue
-        # append values
-        values.append(param_chi_b[coeff][i])
-    chi_b[chi] = values
+for chi_file in ["/data/chi_b_nS0.csv","/data/chi_b.csv"]:
+    param_chi_b = pd.read_csv(dir_path+chi_file).to_dict(orient='list')
+    # scan rows for each chi
+    for i,chi in enumerate(param_chi_b['chi']):
+        values = []
+        # scan columns with coefficients
+        for j,coeff in enumerate(param_chi_b):
+            # skip first column which is chi string
+            if(coeff=='chi'):
+                continue
+            # append values
+            values.append(param_chi_b[coeff][i])
+        chi_b.update({chi:values})
 
 # list of all susceptibilities
 list_chi = list(param_chi_a['chi'])
+list_chi_nS0 = ['chiB2_nS0','chiB4_nS0']
 
 ########################################################################
 # Stefan Boltzmann limit for the susceptibilities
@@ -110,6 +113,8 @@ chi_SB = dict(zip(list_chi,[19.*pi**2./36.,\
     4./(9.*pi**2.),-2./pi**2.,2./pi**2.,\
     4./(9.*pi**2.),2./(3.*pi**2.),2./(3.*pi**2.),\
     2./(9.*pi**2.),-2./(9.*pi**2.),-2./(3.*pi**2.)]))
+
+chi_SB.update(dict(zip(list_chi_nS0,[0.1067856506125367,0.0006673764465596013])))
 
 ########################################################################
 def param_chi(T,quant):
@@ -142,6 +147,8 @@ for chi in list_chi:
         for ich,xcharge in enumerate(list_charge):
             BQS[chi][xcharge] = int(list_der[ich]) # match each charge to its derivative
 
+chi_latex.update({'chiB2_nS0':r'$c_2$', 'chiB4_nS0':r'$c_4$'})
+
 ########################################################################
 def param(T,muB,muQ,muS):
     """
@@ -157,7 +164,7 @@ def param(T,muB,muQ,muS):
         s = 0.
         e = 0.
 
-        if(muB==0. and muQ==0. and muS == 0.):
+        if(muB==0. and muQ==0. and muS==0.):
             p = param_chi(T,'chi0')
             der = scipy.misc.derivative(param_chi,T,dx=1e-5,args=('chi0',))
             s = T*der
@@ -214,6 +221,67 @@ def param(T,muB,muQ,muS):
                 
     return {'T': T,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
 
+########################################################################
+def param_nS0(T,muB):
+    """
+    Parametrization of thermodynamic quantities from lQCD
+    as a function of T, \mu_B for the case <n_S>=0 & <n_Q>=0.4<n_B>
+    """
+    # if input is a single temperature value T
+    if(isinstance(T,float)):
+        p = 0.
+        nB = 0.
+        nQ = 0.
+        nS = 0.
+        s = 0.
+        e = 0.
+
+        p = param_chi(T,'chi0')
+        der = scipy.misc.derivative(param_chi,T,dx=1e-5,args=('chi0',))
+        s = T*der
+        if(muB!=0.):
+            for ichi,chi in enumerate(list_chi_nS0):
+                i = 2*(ichi+1)
+                xchi = param_chi(T,chi)
+                pow_muB = ((muB/T)**i)
+                # pressure P/T^4
+                p += xchi*pow_muB
+                # baryon density n_B/T^3 when i > 1
+                nB += xchi*i*((muB/T)**(i-1.))
+                # derivative of the susceptibility wrt temperature
+                der = scipy.misc.derivative(param_chi,T,dx=1e-5,args=(chi,))
+                # s/T^3 = T d(P/T^4)/d(T) + 4 P/T^4
+                # here we add just the 1st part
+                s += (T*der-(i)*xchi)*pow_muB
+        # add 2nd piece to s/T^3
+        s += 4.*p
+        # energy density e/T^4
+        e = s-p+(muB/T)*nB
+        # charge density
+        nQ = 0.4*nB
+    
+    # if the input is a list of temperature values
+    elif(isinstance(T,np.ndarray) or isinstance(T,list)):
+        p = np.zeros_like(T)
+        s = np.zeros_like(T)
+        nB = np.zeros_like(T)
+        nQ = np.zeros_like(T)
+        nS = np.zeros_like(T)
+        e = np.zeros_like(T)
+        for i,xT in enumerate(T):
+            result = param_nS0(xT,muB)
+            p[i] = result['P']
+            s[i] = result['s']
+            nB[i] = result['n_B']
+            nQ[i] = result['n_Q']
+            nS[i] = result['n_S']
+            e[i] = result['e']
+
+    else:
+        raise Exception('Problem with input')
+                
+    return {'T': T,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
+
 ###############################################################################
 # import data from lattice at muB = 0
 ###############################################################################
@@ -242,6 +310,16 @@ try:
         if(entry=='T' or '_err' in entry):
             continue
         chi_lattice2015.update({entry:np.array([[df['T'][iT],df[entry][iT],df[entry+'_err'][iT]] for iT,_ in enumerate(df[entry]) if np.logical_not(np.isnan(df[entry][iT]))])})
+except:
+    pass
+# read data from 2017 (chiB2,chiB4,chiB2) for <nS>=0 & <nQ>=0.4<nB>
+chi_lattice2017 = {}
+try:
+    df = pd.read_csv(dir_path+"/data/WB_chi_nS0_T_EPJWebConf.137(2017)07008.csv").to_dict(orient='list')
+    for entry in df:
+        if(entry=='T' or '_err' in entry):
+            continue
+        chi_lattice2017.update({entry:np.array([[df['T'][iT],df[entry][iT],df[entry+'_err'][iT]] for iT,_ in enumerate(df[entry]) if np.logical_not(np.isnan(df[entry][iT]))])})
 except:
     pass
 # read data from 2018
@@ -401,9 +479,12 @@ def EoS_nS0(fun,xT,muB,**kwargs):
         T = xT
         p = 0.
         nB = 0.
+        nQ = 0.
+        nS = 0.
         s = 0.
         e = 0.
         n = 0.
+        chi = np.zeros(len(list_chi))
         
         def system(mu):
             """
@@ -422,9 +503,13 @@ def EoS_nS0(fun,xT,muB,**kwargs):
         p = result['P']
         s = result['s']
         nB = result['n_B']
+        nQ = factQB*nB
+        nS = 0.
         e = result['e'] 
+        # some extra quantities are calculated within HRG function
         try:
             n = result['n']
+            chi = result['chi']
         except:
             pass
         
@@ -432,21 +517,27 @@ def EoS_nS0(fun,xT,muB,**kwargs):
         p = np.zeros_like(xT)
         s = np.zeros_like(xT)
         nB = np.zeros_like(xT)
+        nQ = np.zeros_like(xT)
+        nS = np.zeros_like(xT)
         n = np.zeros_like(xT)
         e = np.zeros_like(xT)
         muQ = np.zeros_like(xT)
         muS = np.zeros_like(xT)
+        chi = np.zeros((len(list_chi),len(xT)))
         for i,T in enumerate(xT):
             result = EoS_nS0(fun,T,muB,**kwargs)
             p[i] = result['P']
             s[i] = result['s']
             nB[i] = result['n_B']
+            nQ[i] = result['n_Q']
+            nS[i] = result['n_S']
             n[i] = result['n']
             e[i] = result['e']
             muQ[i] = result['muQ']
             muS[i] = result['muS']
+            chi[:,i] = result['chi']
     
     else:
         raise Exception('Problem with input')
     
-    return {'T':xT, 'muQ': muQ, 'muS': muS, 'P':p, 's':s, 'n_B':nB, 'n':n, 'e':e} 
+    return {'T':xT, 'muQ': muQ, 'muS': muS, 'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'n':n, 'e':e, 'chi':chi} 
