@@ -10,14 +10,14 @@ from .. import *
 from EoS_HRG.HRG import HRG,fit_freezeout
 # to plot
 from EoS_HRG.test.plot_lattice import plot_lattice 
-from EoS_HRG.fit_lattice import lattice_data, Tc_lattice, EoS_nS0
+from EoS_HRG.fit_lattice import Tc_lattice, Tc_lattice_muBoT, param, EoS_nS0, WB_EoS0
 
 # directory where the fit_lattice_test.py is located
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 ###############################################################################
 @timef
-def main(EoS,tab):
+def main(EoS,tab,muBoT=False):
 
     ###############################################################################
     __doc__ = """Produce plots for the HRG EoS defined in EoS_HRG.HRG 
@@ -56,33 +56,53 @@ def main(EoS,tab):
 
     print(EoS)
     # quantities to plot
-    list_quant = ['P','n_B','s','e']
+    list_quant = ['P','n_B','s','e','I']
     # initialize plots with lattice data
-    dict_plots = plot_lattice(EoS,tab)
+    dict_plots = plot_lattice(EoS,tab,list_quant,all_labels=False,muBoT=muBoT)
 
     # initialize values of T to evaluate
     xtemp = np.linspace(Tmin,Tmax,args.Npoints)
     for muB,color in tab:
-        print('    muB = ', muB, ' GeV')
+        if(not muBoT):
+            print('    muB = ', muB, ' GeV')
+        elif(muBoT):
+            print('    muB/T = ', muB)
+
+        if(not muBoT):
+            xmuB = muB
+        elif(muBoT):
+            xmuB = muB*xtemp # fixed value of muB/T
 
         if(EoS!='nS0'):
-            yval = HRG(xtemp,muB,0.,0.,species=args.species,offshell=args.offshell)
+            yval = HRG(xtemp,xmuB,0.,0.,species=args.species,offshell=args.offshell)
         else:
-            yval = EoS_nS0(HRG,xtemp,muB,species=args.species,offshell=args.offshell)
+            yval = EoS_nS0(HRG,xtemp,xmuB,species=args.species,offshell=args.offshell)
 
-        for ipl,quant in enumerate(list_quant):
+        for quant in list_quant:
             if(quant=='n_B' and muB==0): # don't plot n_B when \mu_B = 0
                 continue
             # plot HRG EoS with solid line below Tc
-            cond = xtemp <= Tc_lattice(muB)
-            dict_plots[quant][1].plot(xtemp[cond],yval[quant][cond], color=color, linewidth='2.5', label=r'$ \mu_B = $'+str(muB)+' GeV')
-            # plot HRG EoS with dashed line above Tc
-            dict_plots[quant][1].plot(xtemp,yval[quant], '--', color=color, linewidth='2.5')
+            if(not muBoT):
+                cond = xtemp <= Tc_lattice(muB)
+                label = r'$ \mu_B = $'+str(muB)+' GeV'
+            elif(muBoT):
+                cond = xtemp <= Tc_lattice_muBoT(muB)
+                label = r'$ \mu_B/T = $'+str(muB)
+
+            dict_plots[quant][1].plot(xtemp[cond],yval[quant][cond], color=color, linewidth='2.5', label=label)
+            # plot HRG EoS with lighter line above Tc
+            dict_plots[quant][1].plot(xtemp,yval[quant], color=color, linewidth='2.5', alpha=0.5)
             dict_plots[quant][1].legend(bbox_to_anchor=(0.05, 0.75),title='PHSD HRG', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
 
         # output data
         if(args.output):
-            with open(f"{dir_path}/HRG_muB{int(muB*10):02d}_{EoS}{species_out}.dat",'w') as outfile:
+            # output data for each \mu_B or \mu_B/T
+            if(not muBoT):
+                filename = f"{dir_path}/HRG_muB{int(muB*10):02d}_{EoS}{species_out}.dat"
+            elif(muBoT):
+                filename = f"{dir_path}/HRG_muBoT{muB}_{EoS}{species_out}.dat"
+
+            with open(filename,'w') as outfile:
                 outfile.write(",".join(yval.keys()))
                 outfile.write('\n')
                 for i,_ in enumerate(yval['T']):
@@ -95,21 +115,31 @@ def main(EoS,tab):
         """
         ymax = np.zeros(len(list_quant))
         for muB,_ in tab:
-            lQCD = lattice_data(EoS,muB)
+            if(not muBoT):
+                xmuB = muB
+            elif(muBoT):
+                xmuB = muB*xtemp # fixed value of muB/T
+            if(EoS=='muB'):
+                paramdata = param(xtemp,xmuB,0.,0.)
+            elif(EoS=='nS0'):
+                paramdata = EoS_nS0(param,xtemp,xmuB)
+
             for iq,quant in enumerate(list_quant):
-                TlQCD = lQCD['T']
-                dlQCD, _ = lQCD[quant]
-                test = dlQCD[TlQCD < Tmax].max()
+                dlQCD = paramdata[quant]
+                test = dlQCD.max()
                 if(test>ymax[iq]):
                     ymax[iq] = test
         return dict(zip(list_quant,ymax*1.1))
 
     max_val = getmax()
     # for each plot, adapt range in (x,y) and export
-    for ipl,quant in enumerate(list_quant):
+    for quant in list_quant:
         dict_plots[quant][1].set_xlim(Tmin,Tmax)
         dict_plots[quant][1].set_ylim(0.,max_val[quant])
-        dict_plots[quant][0].savefig(f"{dir_path}/HRG_{quant}_T_{EoS}{species_out}.png")
+        if(not muBoT):
+            dict_plots[quant][0].savefig(f"{dir_path}/HRG_{quant}_T_muB_{EoS}{species_out}.png")
+        elif(muBoT):
+            dict_plots[quant][0].savefig(f"{dir_path}/HRG_{quant}_T_muBoT_{EoS}{species_out}.png")
         dict_plots[quant][0].clf()
         pl.close(dict_plots[quant][0])
 
@@ -118,7 +148,7 @@ def main(EoS,tab):
         Plot the contribution to the HRG EoS from different individual particles
         """
         # quantities to plot
-        list_quant = ['n']#,'P','n_B','s','e']
+        list_quant = ['P']#,'n_B','s','e','n']
         # initialize plot
         plots = np.array([pl.subplots(figsize=(10,7)) for x in np.arange(len(list_quant))])
         f = plots[:,0]
@@ -126,11 +156,17 @@ def main(EoS,tab):
 
         # initialize values of T to evaluate
         xtemp = np.linspace(Tmin,Tmax,args.Npoints)
+
+        if(not muBoT):
+            xmuB = muB
+        elif(muBoT):
+            xmuB = muB*xtemp # fixed value of muB/T
+
         # EoS including all particles
         if(EoS!='nS0'):
-            yval = HRG(xtemp,muB,0.,0.,species='all',offshell=args.offshell)
+            yval = HRG(xtemp,xmuB,0.,0.,species='all',offshell=args.offshell)
         else:
-            yval = EoS_nS0(HRG,xtemp,muB,species='all',offshell=args.offshell)
+            yval = EoS_nS0(HRG,xtemp,xmuB,species='all',offshell=args.offshell)
             # keep the values of muQ and muS as a function of T for later
             list_muQ = yval['muQ']
             list_muS = yval['muS']
@@ -143,10 +179,10 @@ def main(EoS,tab):
         line = '-'
         for part in list_part:
             if(EoS!='nS0'):
-                yval = HRG(xtemp,muB,0.,0.,species=part,offshell=args.offshell)
+                yval = HRG(xtemp,xmuB,0.,0.,species=part,offshell=args.offshell)
             else:
                 # use stored values of muQ and muS as a function of T
-                yval = HRG(xtemp,muB,list_muQ,list_muS,species=part,offshell=args.offshell)
+                yval = HRG(xtemp,xmuB,list_muQ,list_muS,species=part,offshell=args.offshell)
 
             for ipl,quant in enumerate(list_quant):
                 ax[ipl].plot(xtemp,yval[quant], line, linewidth='2.5', label=r'$'+latex(part)+'$')
@@ -164,19 +200,31 @@ def main(EoS,tab):
             else:
                 ylabel = '$'+quant+'/T^4$'
             if(EoS!='nS0'):
-                title = f'$\mu_B =$ {muB} GeV; $\mu_Q = \mu_S = 0$'
+                if(not muBoT):
+                    title = f'$\mu_B =$ {muB} GeV; $\mu_Q = \mu_S = 0$'
+                elif(muBoT):
+                    title = f'$\mu_B/T =$ {muB}; $\mu_Q = \mu_S = 0$'
             else:
-                title = rf'$\mu_B =$ {muB} GeV; $\langle n_S \rangle = 0$ & $\langle n_Q \rangle = 0.4 \langle n_B \rangle$'
+                if(not muBoT):
+                    title = rf'$\mu_B =$ {muB} GeV; $\langle n_S \rangle = 0$ & $\langle n_Q \rangle = 0.4 \langle n_B \rangle$'
+                elif(muBoT):
+                    title = rf'$\mu_B/T =$ {muB}; $\langle n_S \rangle = 0$ & $\langle n_Q \rangle = 0.4 \langle n_B \rangle$'
             ax[ipl].set(xlabel='T [GeV]', ylabel=ylabel, title=title)
             ax[ipl].set_xlim(Tmin,Tmax)
             ax[ipl].set_yscale('log')
-            f[ipl].savefig(f"{dir_path}/HRG_{quant}_T_muB{int(muB*10):02d}_{EoS}_species.png")
+            if(not muBoT):
+                f[ipl].savefig(f"{dir_path}/HRG_{quant}_T_muB{int(muB*10):02d}_{EoS}_species.png")
+            elif(muBoT):
+                f[ipl].savefig(f"{dir_path}/HRG_{quant}_T_muBoT{muB}_{EoS}_species.png")
             f[ipl].clf()
             pl.close(f[ipl])
 
     # call function plot_species here
     for muB,_ in tab:
-        print('    muB = ', muB, ' GeV')
+        if(not muBoT):
+            print('    species - muB = ', muB, ' GeV')
+        elif(muBoT):
+            print('    species - muB/T = ', muB)
         plot_species(EoS,muB)
 
 ###############################################################################
@@ -357,9 +405,13 @@ def plot_freezeout(dict_yield,**kwargs):
 if __name__ == "__main__":
     # values of \mu_B where to test the parametrization of lQCD data
     tab = [[0.,'r'],[0.2,'tab:orange'],[0.3,'b'],[0.4,'g']]
-
+    
     main('muB',tab)
     main('nS0',tab)
+
+    tab = [[0,'r'],[1,'tab:orange'],[2,'b'],[3,'g'],[3.5,'m']]
+    main('muB',tab,muBoT=True)
+    main('nS0',tab,muBoT=True)
     
     # BES STAR data, for tests (PHYSICAL REVIEW C 96, 044904 (2017))
     # just the pions and Lambdas are corrected for feed-down weak decays

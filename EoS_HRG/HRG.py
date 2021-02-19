@@ -257,7 +257,7 @@ def norm_BW():
 norm = norm_BW()
 
 ########################################################################
-def HRG(xT,muB,muQ,muS,**kwargs):
+def HRG(T,muB,muQ,muS,**kwargs):
     """
     Calculation of the HRG EoS as a function of T,muB,muQ,muS
     kwargs:
@@ -288,8 +288,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
     except:
         species = 'all' # default - consider all particles
 
-    if(isinstance(xT,float)):
-        T = xT
+    if(isinstance(T,float)):
         p = 0.
         ndens = 0.
         nB = 0.
@@ -421,30 +420,30 @@ def HRG(xT,muB,muQ,muS,**kwargs):
         e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
     
     # if the temperature input is a list
-    elif(isinstance(xT,np.ndarray) or isinstance(xT,list)):
-        p = np.zeros_like(xT)
-        s = np.zeros_like(xT)
-        ndens = np.zeros_like(xT)
-        nB = np.zeros_like(xT)
-        nQ = np.zeros_like(xT)
-        nS = np.zeros_like(xT)
-        e = np.zeros_like(xT)
-        chi = np.zeros((len(list_chi),len(xT)))
-        for i,T in enumerate(xT):
+    elif(isinstance(T,np.ndarray) or isinstance(T,list)):
+        p = np.zeros_like(T)
+        s = np.zeros_like(T)
+        ndens = np.zeros_like(T)
+        nB = np.zeros_like(T)
+        nQ = np.zeros_like(T)
+        nS = np.zeros_like(T)
+        e = np.zeros_like(T)
+        chi = np.zeros((len(list_chi),len(T)))
+        for i,xT in enumerate(T):
             # see if arrays are also given for chemical potentials
             try:
-                valmuB = muB[i]
+                xmuB = muB[i]
             except:
-                valmuB = muB
+                xmuB = muB
             try:
-                valmuQ = muQ[i]
+                xmuQ = muQ[i]
             except:
-                valmuQ = muQ
+                xmuQ = muQ
             try:
-                valmuS = muS[i]
+                xmuS = muS[i]
             except:
-                valmuS = muS
-            result = HRG(T,valmuB,valmuQ,valmuS,**kwargs)
+                xmuS = muS
+            result = HRG(xT,xmuB,xmuQ,xmuS,**kwargs)
             p[i] = result['P']
             s[i] = result['s']
             ndens[i] = result['n']
@@ -457,7 +456,7 @@ def HRG(xT,muB,muQ,muS,**kwargs):
     else:
         raise Exception('Problem with input')
     
-    return {'T': xT,'P':p, 's':s, 'n':ndens, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e, 'chi':chi}
+    return {'T': T,'P':p, 's':s, 'n':ndens, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e, 'chi':chi, 'I':e-3*p}
 
 ########################################################################
 def HRG_freezout(T,muB,muQ,muS,gammaS,EoS='full',**kwargs):

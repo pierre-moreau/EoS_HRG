@@ -64,6 +64,16 @@ def dTcdmuB_lattice(muB):
     dTc = -2.*muB*kappa2/Tc0 -4.*(muB**3.)*kappa4/Tc0**3.
     return dTc
 
+def Tc_lattice_muBoT(muBoT):
+    """
+    Find the critical temperature Tc for a fixed muB/T
+    """
+    if(muBoT==0):
+        return Tc_lattice(0.)
+    else:
+        xmuB = scipy.optimize.root(lambda muB: muB/Tc_lattice(muB)-muBoT,[muBoT*Tc0],method='lm').x[0]
+        return Tc_lattice(xmuB)
+
 ###############################################################################
 # import data for the parametrization of susceptibilities
 ###############################################################################
@@ -208,7 +218,20 @@ def param(T,muB,muQ,muS):
         nS = np.zeros_like(T)
         e = np.zeros_like(T)
         for i,xT in enumerate(T):
-            result = param(xT,muB,muQ,muS)
+            # see if arrays are also given for chemical potentials
+            try:
+                xmuB = muB[i]
+            except:
+                xmuB = muB
+            try:
+                xmuQ = muQ[i]
+            except:
+                xmuQ = muQ
+            try:
+                xmuS = muS[i]
+            except:
+                xmuS = muS
+            result = param(xT,xmuB,xmuQ,xmuS)
             p[i] = result['P']
             s[i] = result['s']
             nB[i] = result['n_B']
@@ -219,7 +242,7 @@ def param(T,muB,muQ,muS):
     else:
         raise Exception('Problem with input')
                 
-    return {'T': T,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
+    return {'T': T,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e, 'I':e-3*p}
 
 ########################################################################
 def param_nS0(T,muB):
@@ -269,7 +292,12 @@ def param_nS0(T,muB):
         nS = np.zeros_like(T)
         e = np.zeros_like(T)
         for i,xT in enumerate(T):
-            result = param_nS0(xT,muB)
+            # see if arrays are also given for chemical potentials
+            try:
+                xmuB = muB[i]
+            except:
+                xmuB = muB
+            result = param_nS0(xT,xmuB)
             p[i] = result['P']
             s[i] = result['s']
             nB[i] = result['n_B']
@@ -280,7 +308,7 @@ def param_nS0(T,muB):
     else:
         raise Exception('Problem with input')
                 
-    return {'T': T,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
+    return {'T': T,'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e, 'I':e-3*p}
 
 ###############################################################################
 # import data from lattice at muB = 0
@@ -290,8 +318,8 @@ def param_nS0(T,muB):
 WB_EoS0 = pd.read_csv(dir_path+"/data/WB-EoS_muB0_j.physletb.2014.01.007.csv").to_dict(orient='list')
 chi_lattice2014 = {'chi0':np.array(list(zip(WB_EoS0['T'],WB_EoS0['P'],WB_EoS0['P_err'])))}
 # save all other thermodynamic quantities
-for chi in WB_EoS0:
-    WB_EoS0[chi] = np.array(WB_EoS0[chi])
+for quant in WB_EoS0:
+    WB_EoS0[quant] = np.array(WB_EoS0[quant])
 # read data from 2012 (chiB2,chiQ2,chiS2)
 chi_lattice2012 = {}
 try:
@@ -342,132 +370,19 @@ try:
         chi_lattice2020.update({entry:np.array(list(zip(df['T'],df[entry],df[entry+'_err'])))})
 except:
     pass
+# read data from 2021
+WB_EoS_muBoT2021 = {}
+try:
+    df = pd.read_csv(dir_path+"/data/WB-EoS_muBoT_2102.06660.csv").to_dict(orient='list')
+    for entry in df:
+        if(entry=='T' or '_err' in entry):
+            continue
+        WB_EoS_muBoT2021.update({entry:np.array(list(zip(df['T'],df[entry],df[entry+'_err'])))})
+except:
+    pass
 
 ###############################################################################
-def lattice_data(EoS,muB):
-    """
-    Produces the lattice data for P/T^4, nB/T^3, s/T^3, e/T^4 as a function of T for a single value of muB
-    """
-
-    # select which susceptibilities to use according to the EoS to evaluate
-    if(EoS=='nS0'):
-    # import data from lattice for the susceptibilities 
-    # case when <n_S> = 0 & <n_Q> = 0.4 <n_B>
-        WB_chi = pd.read_csv(dir_path+"/data/WB_chi_T_nS0.csv", skiprows=1).to_dict('list')
-        for chi in WB_chi:
-            WB_chi[chi] = np.array(WB_chi[chi])
-    # case when \mu_u = \mu_d = \mu_s = \mu_B/3
-    elif(EoS=='muB'):
-        WB_chi = pd.read_csv(dir_path+"/data/WB_chi_T_muB.csv", skiprows=1).to_dict('list')
-        for chi in WB_chi:
-            WB_chi[chi] = np.array(WB_chi[chi])
-
-    # Maximum order in the susceptibilities from lattice
-    ord_max = 6
-
-    # case when \mu_B = 0
-    if(muB == 0.):
-        xtemp = WB_EoS0['T']
-        result_P = WB_EoS0['P']
-        err_P = WB_EoS0['P_err']
-        # return n_B = 0 
-        result_nB = np.zeros_like(xtemp)
-        err_nB = np.zeros_like(xtemp)
-        result_s = WB_EoS0['s']
-        err_s = WB_EoS0['s_err']
-        result_e = WB_EoS0['e']
-        err_e = WB_EoS0['e_err']
-            
-    # case when \mu_B != 0
-    else:
-        # now range in T is defined by the range covered by the susceptibilities (chi)
-        xtemp = WB_chi['T']
-        result_p0 = np.zeros_like(xtemp)
-        err_p0 = np.zeros_like(xtemp)
-        result_s0 = np.zeros_like(xtemp)
-        err_s0 = np.zeros_like(xtemp)
-        result_e0 = np.zeros_like(xtemp)
-        err_e0 = np.zeros_like(xtemp)
-
-        # scan values of T in the values of chi
-        for i,xT1 in enumerate(xtemp):
-            # scan values of T in the EoS at muB = 0
-            for j,xT2 in enumerate(WB_EoS0['T']):
-                # search for a match
-                if(xT1 == xT2):
-                    result_p0[i] = WB_EoS0['P'][j]
-                    err_p0[i] = WB_EoS0['P_err'][j]
-
-                    result_s0[i] = WB_EoS0['s'][j]
-                    err_s0[i] = WB_EoS0['s_err'][j]
-
-                    result_e0[i] = WB_EoS0['e'][j]
-                    err_e0[i] = WB_EoS0['e_err'][j]
-    
-        def dchidT(i):
-            """
-            Return the list corresponding to the estimation of the derivative wrt T of the susceptibility of order i
-            """            
-            # Instantiate a Gaussian Process model
-            kernel = ConstantKernel(constant_value=1.0, constant_value_bounds=(1e-3, 1e3))*RBF(length_scale=0.01, length_scale_bounds=(0.001, 0.1))
-            # alpha (noise) proportionnal to the actual error in lQCD data for chi(T)
-            gp = GaussianProcessRegressor(kernel=kernel, alpha=WB_chi[f'P{i}_err']/100., n_restarts_optimizer=1)
-            # Fit to data using Maximum Likelihood Estimation of the parameters
-            gp.fit(np.atleast_2d(xtemp).T, np.atleast_2d(WB_chi[f'P{i}']).T)
-            # calculate derivative by using prediction from GP
-            dchidT = np.zeros_like(xtemp)
-            dT=1e-5
-            for iT,xT in enumerate(xtemp):
-                eval = gp.predict(np.atleast_2d([xT+dT,xT-dT]).T, return_std=False)
-                dchidT[iT] = (eval[0]-eval[1])/(2.*dT)
-
-            """
-            # tests : plot to see the accuracy of GP
-            y_pred, sigma = gp.predict(np.atleast_2d(xtemp).T, return_std=True)
-            f,ax = pl.subplots(figsize=(10,7))
-            ax.plot(xtemp, WB_chi[f'P{i}'],'o')
-            ax.errorbar(xtemp, WB_chi[f'P{i}'], yerr=WB_chi[f'P{i}_err'], xerr=None)
-            ax.plot(xtemp, y_pred.flat)
-            ax.fill_between(xtemp, y_pred.flat-2*sigma, y_pred.flat+2*sigma, color="#dddddd")
-            ax.plot(xtemp,dchidT/30.)
-            f.savefig(f'{dir_path}/test_chi{i}.png')
-            pl.show()
-            """
-            
-            return dchidT
-
-        # error is calculated such as f = a_1*x_1 + a_2*x_2: \delta(f) = sqrt((a_1*\delta(x_1))**2. + (a_2*\delta(x_2))**2.)
-        if(EoS == 'nS0'):
-            # pressure P/T^4
-            result_P = result_p0 + sum([((muB/xtemp)**i)*WB_chi[f'P{i}'] for i in range(2,ord_max+1,2)])
-            err_P = np.sqrt(err_p0**2. + sum([(((muB/xtemp)**i)*WB_chi[f'P{i}_err'])**2. for i in range(2,ord_max+1,2)]))
-            # baryon density n_B\T^3
-            result_nB = sum([(i*(muB/xtemp)**(i-1.))*WB_chi[f'P{i}'] for i in range(2,ord_max+1,2)])
-            err_nB = np.sqrt(sum([((i*(muB/xtemp)**(i-1.))*WB_chi[f'P{i}_err'])**2. for i in range(2,ord_max+1,2)]))
-            # entropy density s/T^3 = s_0/T^3 + 4*\Delta P/T^4 + T d(\Delta P/T^4)/dT
-            result_s = result_s0 + sum([((muB/xtemp)**i)*(xtemp*dchidT(i)+(4.-i)*WB_chi[f'P{i}']) for i in range(2,ord_max+1,2)])
-            err_s = None
-            # energy density e/T^4 = s/T^3 - P/T^4 + \mu_B/T n_B/T^3
-            result_e = result_e0 + sum([((muB/xtemp)**i)*(xtemp*dchidT(i)+3.*WB_chi[f'P{i}']) for i in range(2,ord_max+1,2)])
-            err_e = None
-        elif(EoS == 'muB'):
-            # pressure P/T^4
-            result_P = result_p0 + sum([((muB/xtemp)**i)*WB_chi[f'P{i}']/factorial(i) for i in range(2,ord_max+1,2)])
-            err_P = np.sqrt(err_p0**2. + sum([(((muB/xtemp)**i)*WB_chi[f'P{i}_err']/factorial(i))**2. for i in range(2,ord_max+1,2)]))
-            # baryon density n_B\T^3
-            result_nB = sum([(i*(muB/xtemp)**(i-1.))*WB_chi[f'P{i}']/factorial(i) for i in range(2,ord_max+1,2)])
-            err_nB = np.sqrt(sum([((i*(muB/xtemp)**(i-1.))*WB_chi[f'P{i}_err']/factorial(i))**2. for i in range(2,ord_max+1,2)]))
-            # entropy density s/T^3
-            result_s = result_s0 + sum([((muB/xtemp)**i)*(xtemp*dchidT(i)+(4.-i)*WB_chi[f'P{i}'])/factorial(i) for i in range(2,ord_max+1,2)])
-            err_s = None
-            # energy density e/T^4 = s/T^3 - P/T^4 + \mu_B/T n_B/T^3
-            result_e = result_e0 + sum([((muB/xtemp)**i)*(xtemp*dchidT(i)+3.*WB_chi[f'P{i}'])/factorial(i) for i in range(2,ord_max+1,2)])
-            err_e = None
-    
-    return {'T': xtemp, 'P': [result_P,err_P], 'n_B': [result_nB,err_nB],'s': [result_s,err_s], 'e': [result_e,err_e]}   
-
-###############################################################################
-def EoS_nS0(fun,xT,muB,**kwargs):
+def EoS_nS0(fun,T,muB,**kwargs):
     """
     Calculation of the EoS defined by the input function at (T,muB) with the conditions:
     <n_S> = 0
@@ -475,8 +390,7 @@ def EoS_nS0(fun,xT,muB,**kwargs):
     """
     factQB = 0.4
 
-    if(isinstance(xT,float)):
-        T = xT
+    if(isinstance(T,float)):
         p = 0.
         nB = 0.
         nQ = 0.
@@ -493,7 +407,7 @@ def EoS_nS0(fun,xT,muB,**kwargs):
             <n_Q> = factQB * <n_B>
             """
             thermo = fun(T,muB,mu[0],mu[1],**kwargs)
-            return [thermo['n_S'], thermo['n_Q']-factQB*thermo['n_B']]
+            return [thermo['n_S']*T**3, thermo['n_Q']*T**3-factQB*thermo['n_B']*T**3]
             
         solution = scipy.optimize.root(system,[-0.08*muB,0.03*muB],method='lm').x
         muQ = solution[0]
@@ -513,19 +427,24 @@ def EoS_nS0(fun,xT,muB,**kwargs):
         except:
             pass
         
-    elif(isinstance(xT,np.ndarray) or isinstance(e,list)):
-        p = np.zeros_like(xT)
-        s = np.zeros_like(xT)
-        nB = np.zeros_like(xT)
-        nQ = np.zeros_like(xT)
-        nS = np.zeros_like(xT)
-        n = np.zeros_like(xT)
-        e = np.zeros_like(xT)
-        muQ = np.zeros_like(xT)
-        muS = np.zeros_like(xT)
-        chi = np.zeros((len(list_chi),len(xT)))
-        for i,T in enumerate(xT):
-            result = EoS_nS0(fun,T,muB,**kwargs)
+    elif(isinstance(T,np.ndarray) or isinstance(T,list)):
+        p = np.zeros_like(T)
+        s = np.zeros_like(T)
+        nB = np.zeros_like(T)
+        nQ = np.zeros_like(T)
+        nS = np.zeros_like(T)
+        n = np.zeros_like(T)
+        e = np.zeros_like(T)
+        muQ = np.zeros_like(T)
+        muS = np.zeros_like(T)
+        chi = np.zeros((len(list_chi),len(T)))
+        for i,xT in enumerate(T):
+            # see if arrays are also given for chemical potentials
+            try:
+                xmuB = muB[i]
+            except:
+                xmuB = muB
+            result = EoS_nS0(fun,xT,xmuB,**kwargs)
             p[i] = result['P']
             s[i] = result['s']
             nB[i] = result['n_B']
@@ -540,4 +459,4 @@ def EoS_nS0(fun,xT,muB,**kwargs):
     else:
         raise Exception('Problem with input')
     
-    return {'T':xT, 'muQ': muQ, 'muS': muS, 'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'n':n, 'e':e, 'chi':chi} 
+    return {'T':T, 'muQ': muQ, 'muS': muS, 'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'n':n, 'e':e, 'chi':chi, 'I':e-3*p} 

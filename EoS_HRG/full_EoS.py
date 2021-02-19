@@ -36,17 +36,24 @@ From function full_EoS, find [T,muB,muQ,muS] from thermodynamic quantities:
     args = parser.parse_args()
 
 ########################################################################
-def full_EoS(xT,muB,muQ,muS,**kwargs):
+def full_EoS(T,muB,muQ,muS,**kwargs):
     """
     full EoS (matching between lQCD and HRG) at a fixed T,muB,muQ,muS
     """
 
-    if(isinstance(xT,float)):
-        T = xT
-        dT = 0.1*Tc_lattice(0.)
+    if(isinstance(T,float)):
+
+        try:
+            Ttrans = kwargs['Ttrans']
+            dTtransdmuB = Ttrans.derivative(nu=1)
+        except:
+            Ttrans = Tc_lattice # default function for transition temperature as a function of muB
+            dTtransdmuB = dTcdmuB_lattice
         
+        dT = 0.1*Ttrans(0.)  # matching interval
+
         # if T is large, EoS from lattice only
-        if(T>Tc_lattice(muB)+3.*dT):
+        if(T>Ttrans(muB)+3.*dT):
             result = param(T,muB,muQ,muS)
             p = result['P']
             nB = result['n_B']
@@ -55,7 +62,7 @@ def full_EoS(xT,muB,muQ,muS,**kwargs):
             s = result['s']
             e = result['e']
         # if T is small, EoS from HRG only
-        elif(T<Tc_lattice(muB)-3.*dT):
+        elif(T<Ttrans(muB)-3.*dT):
             result = HRG(T,muB,muQ,muS,**kwargs)
             p = result['P']
             nB = result['n_B']
@@ -66,31 +73,44 @@ def full_EoS(xT,muB,muQ,muS,**kwargs):
         # else, matching between HRG and lattice
         else:
             # matching function, and its derivative wrt T and muB
-            fmatch = lambda xT,xmuB : np.tanh((xT-Tc_lattice(xmuB))/dT)
-            fmatchdT = lambda xT,xmuB : (1.-(np.tanh((xT-Tc_lattice(xmuB))/dT))**2.)/dT
-            fmatchdmu = lambda xT,xmuB : (-dTcdmuB_lattice(xmuB)*(1.-(np.tanh((xT-Tc_lattice(xmuB))/dT))**2.))/dT
+            fmatch = np.tanh((T-Ttrans(muB))/dT)
+            fmatchdT = (1.-(np.tanh((T-Ttrans(muB))/dT))**2.)/dT
+            fmatchdmu = -dTtransdmuB(muB)*(1.-(np.tanh((T-Ttrans(muB))/dT))**2.)/dT
 
             # HRG and lattice EoS
             EoSH = HRG(T,muB,muQ,muS,**kwargs)
             EoSL = param(T,muB,muQ,muS)
             
             # Matching done as in DOI: 10.1103/PhysRevC.100.024907
-            p = 0.5*(1.-fmatch(T,muB))*EoSH['P']+0.5*(1.+fmatch(T,muB))*EoSL['P']
-            nB = 0.5*(1.-fmatch(T,muB))*EoSH['n_B']+0.5*(1.+fmatch(T,muB))*EoSL['n_B']+0.5*T*(EoSL['P']-EoSH['P'])*fmatchdmu(T,muB)
-            nQ = 0.5*(1.-fmatch(T,muB))*EoSH['n_Q']+0.5*(1.+fmatch(T,muB))*EoSL['n_Q']
-            nS = 0.5*(1.-fmatch(T,muB))*EoSH['n_S']+0.5*(1.+fmatch(T,muB))*EoSL['n_S']
-            s = 0.5*(1.-fmatch(T,muB))*EoSH['s']+0.5*(1.+fmatch(T,muB))*EoSL['s']+0.5*T*(EoSL['P']-EoSH['P'])*fmatchdT(T,muB)
+            p = 0.5*(1.-fmatch)*EoSH['P']+0.5*(1.+fmatch)*EoSL['P']
+            nB = 0.5*(1.-fmatch)*EoSH['n_B']+0.5*(1.+fmatch)*EoSL['n_B']+0.5*T*(EoSL['P']-EoSH['P'])*fmatchdmu
+            nQ = 0.5*(1.-fmatch)*EoSH['n_Q']+0.5*(1.+fmatch)*EoSL['n_Q']
+            nS = 0.5*(1.-fmatch)*EoSH['n_S']+0.5*(1.+fmatch)*EoSL['n_S']
+            s = 0.5*(1.-fmatch)*EoSH['s']+0.5*(1.+fmatch)*EoSL['s']+0.5*T*(EoSL['P']-EoSH['P'])*fmatchdT
             e = s-p+(muB/T)*nB+(muQ/T)*nQ+(muS/T)*nS
 
-    elif(isinstance(xT,np.ndarray) or isinstance(e,list)):
-        p = np.zeros_like(xT)
-        s = np.zeros_like(xT)
-        nB = np.zeros_like(xT)
-        nQ = np.zeros_like(xT)
-        nS = np.zeros_like(xT)
-        e = np.zeros_like(xT)
-        for i,T in enumerate(xT):
-            result = full_EoS(T,muB,muQ,muS)
+    elif(isinstance(T,np.ndarray) or isinstance(T,list)):
+        p = np.zeros_like(T)
+        s = np.zeros_like(T)
+        nB = np.zeros_like(T)
+        nQ = np.zeros_like(T)
+        nS = np.zeros_like(T)
+        e = np.zeros_like(T)
+        for i,xT in enumerate(T):
+            # see if arrays are also given for chemical potentials
+            try:
+                xmuB = muB[i]
+            except:
+                xmuB = muB
+            try:
+                xmuQ = muQ[i]
+            except:
+                xmuQ = muQ
+            try:
+                xmuS = muS[i]
+            except:
+                xmuS = muS
+            result = full_EoS(xT,xmuB,xmuQ,xmuS,**kwargs)
             p[i] = result['P']
             s[i] = result['s']
             nB[i] = result['n_B']
@@ -100,15 +120,15 @@ def full_EoS(xT,muB,muQ,muS,**kwargs):
     else:
         raise Exception('Problem with input')
     
-    return {'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e}
+    return {'P':p, 's':s, 'n_B':nB, 'n_Q':nQ, 'n_S':nS, 'e':e, 'I':e-3*p}
 
-def full_EoS_nS0(xT,muB,**kwargs):
+def full_EoS_nS0(T,muB,**kwargs):
     """
     full EoS (matching between lQCD and HRG) at a fixed T,muB
     <n_S> = 0
     <n_Q> = factQB*<n_B>
     """
-    return EoS_nS0(full_EoS,xT,muB,**kwargs)
+    return EoS_nS0(full_EoS,T,muB,**kwargs)
 
 ########################################################################
 def find_param(EoS,**kwargs):
@@ -204,41 +224,49 @@ def isentropic(EoS,snB):
     Calculate isentropic trajectories
     """
     if(EoS=='muB'):
-        fEoS = lambda xT,xmuB : full_EoS(xT,xmuB,0.,0.)
-    elif(EoS=='nS0'):
-        fEoS = lambda xT,xmuB : full_EoS_nS0(xT,xmuB)
 
-    def system(muB,xT):
-        """
-        Define the system to be solved
-        <s> = fact*<n_B> 
-        """
-        thermo = fEoS(xT,muB)
-        return thermo['s']-snB*thermo['n_B']
+        def system(muB,xT):
+            """
+            Define the system to be solved
+            <s> = fact*<n_B> 
+            """
+            thermo = full_EoS(xT,muB,0.,0.)
+            return thermo['s']*xT**3-snB*thermo['n_B']*xT**3
+
+    elif(EoS=='nS0'):
+
+        def system(Tmu,xT):
+            """
+            Define the system to be solved
+            <s> = fact*<n_B> 
+            <n_S> = 0
+            <n_Q> = 0.4*<n_B>
+            """
+            thermo = full_EoS(xT,Tmu[0],Tmu[1],Tmu[2]) # this is unitless
+            return [thermo['s']*xT**3-snB*thermo['n_B']*xT**3, thermo['n_S']*xT**3, thermo['n_Q']*xT**3-0.4*thermo['n_B']*xT**3]
 
     # initialize values of T
     xtemp = np.linspace(0.6,0.2,10)
-    xtemp = np.append(xtemp,np.linspace(0.18,0.1,12))
-    xtemp = np.append(xtemp,np.linspace(0.09,0.01,10))
+    xtemp = np.append(xtemp,np.linspace(0.18,0.1,15))
+    xtemp = np.append(xtemp,np.linspace(0.1,0.05,15))
 
     # now calculate values of muB along isentropic trajectories
     # loop over T
-    xmuB = np.zeros_like(xtemp)
-    for iT,xT in enumerate(xtemp):            
-        try:
-            xmuB[iT] = scipy.optimize.brentq(system,a=0.0001,b=0.75,args=(xT),rtol=0.01)
-        except:
-            xmuB[iT] = None
+    if(EoS=='muB'):
+        xmuB = np.zeros((len(xtemp),1))
+    elif(EoS=='nS0'):
+        xmuB = np.zeros((len(xtemp),3))
+    for iT,xT in enumerate(xtemp):
+
+        if(EoS=='muB'):
+            xmuB[iT,0] = scipy.optimize.root(system,[0.2],args=(xT),method='lm').x
+        elif(EoS=='nS0'):
+            xmuB[iT,0],xmuB[iT,1],xmuB[iT,2] = scipy.optimize.root(system,[0.2,-0.08*0.2,0.03*0.2],args=(xT),method='lm').x
 
     # also output trajectories for mu_Q & mu_S
-    xmuQ = np.zeros_like(xtemp)
-    xmuS = np.zeros_like(xtemp)
-
     if(EoS=='muB'):
+        xmuQ = np.zeros_like(xtemp)
+        xmuS = np.zeros_like(xtemp)
         return xmuB,xtemp,xmuQ,xmuS
     if(EoS=='nS0'):
-        for iT,xT in enumerate(xtemp):  
-            values = fEoS(xT,xmuB[iT])
-            xmuQ[iT] = values['muQ']
-            xmuS[iT] = values['muS']
-        return xmuB,xtemp,xmuQ,xmuS
+        return xmuB[:,0],xtemp,xmuB[:,1],xmuB[:,2]

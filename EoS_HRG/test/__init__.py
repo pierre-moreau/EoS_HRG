@@ -1,5 +1,6 @@
 import time
 from matplotlib.pyplot import rc
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes,mark_inset
 
 ########################################################################
 def timef(fun):

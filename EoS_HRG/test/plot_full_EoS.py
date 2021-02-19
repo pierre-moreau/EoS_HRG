@@ -11,7 +11,7 @@ from . import *
 from EoS_HRG.full_EoS import full_EoS, full_EoS_nS0, find_param, isentropic
 # for the plots, import plots of lQCD data
 from EoS_HRG.test.plot_lattice import plot_lattice
-from EoS_HRG.fit_lattice import lattice_data, Tc_lattice
+from EoS_HRG.fit_lattice import Tc_lattice, Tc_lattice_muBoT, WB_EoS0
 
 # directory where the fit_lattice_test.py is located
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -26,24 +26,24 @@ for two different settings:
 """
 ########################################################################
 @timef
-def main(EoS,tab):
+def main(EoS,tab,muBoT=False):
     # get the range of lattice data in T to plot the parametrization (default values)
-    lQCDdata0 = lattice_data(EoS,0.)
+    lQCDdata0 = WB_EoS0['T']
 
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
-        '--Tmin', type=float, default=lQCDdata0['T'].min(),
+        '--Tmin', type=float, default=min(0.05,lQCDdata0.min()),
         help='minimum temperature [GeV]'
     )
     parser.add_argument(
-        '--Tmax', type=float, default=lQCDdata0['T'].max(),
+        '--Tmax', type=float, default=lQCDdata0.max(),
         help='maximum temperature [GeV]'
     )
     parser.add_argument(
-        '--Npoints', type=int, default=50,
+        '--Npoints', type=int, default=100,
         help='Number of points to plot/output'
     )
     parser.add_argument(
@@ -61,31 +61,45 @@ def main(EoS,tab):
 
     print(EoS)
     # quantities to plot/output
-    list_quant = ['P','n_B','s','e']
+    list_quant = ['P','n_B','n_S','s','e','I']
     # initialize plots with lattice data
-    dict_plots = plot_lattice(EoS,tab)
+    dict_plots = plot_lattice(EoS,tab,list_quant,wparam=False,all_labels=False,muBoT=muBoT)
 
     # initialize temperature values
     xtemp = np.linspace(Tmin,Tmax,args.Npoints)
 
     for muB,color in tab:
-        print('    muB = ', muB, ' GeV')
+        if(not muBoT):
+            print('    muB = ', muB, ' GeV')
+            xmuB = muB
+            label = r'$ \mu_B = $'+str(muB)+' GeV'
+        elif(muBoT):
+            print('    muB/T = ', muB)
+            xmuB = muB*xtemp
+            label = r'$ \mu_B/T = $'+str(muB)
+
         # evaluate the EoS for each value of \mu_B
         if(EoS!='nS0'):
-            yval = full_EoS(xtemp,muB,0.,0.,offshell=args.offshell)
+            yval = full_EoS(xtemp,xmuB,0.,0.,offshell=args.offshell)
         else:
-            yval = full_EoS_nS0(xtemp,muB,offshell=args.offshell)
+            yval = full_EoS_nS0(xtemp,xmuB,offshell=args.offshell)
 
         # plot the resulting curve
         for ipl,quant in enumerate(list_quant):
             if(quant=='n_B' and muB==0.): # don't plot for n_B when \mu_B=0
                 continue
-            dict_plots[quant][1].plot(xtemp,yval[quant], color=color, linewidth='2.5', label=r'$ \mu_B = $'+str(muB)+' GeV')
+
+            dict_plots[quant][1].plot(xtemp,yval[quant], color=color, linewidth='2.5', label=label)
             dict_plots[quant][1].legend(bbox_to_anchor=(0.6, 0.5),title='HRG+lQCD', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
         
         # output data
         if(args.output):
-            with open(f"{dir_path}/fullEoS_muB{int(muB*10):02d}_{EoS}.dat",'w') as outfile:
+            # output data for each \mu_B or \mu_B/T
+            if(not muBoT):
+                filename = f"{dir_path}/fullEoS_muB{int(muB*10):02d}_{EoS}.dat"
+            elif(muBoT):
+                filename = f"{dir_path}/fullEoS_muBoT{muB}_{EoS}.dat"
+            with open(filename,'w') as outfile:
                 outfile.write(",".join(yval.keys()))
                 outfile.write('\n')
                 for i,_ in enumerate(yval['T']):
@@ -95,8 +109,10 @@ def main(EoS,tab):
     # for each plot, adapt the range in (x,y) and export
     for ipl,quant in enumerate(list_quant):
         dict_plots[quant][1].set_xlim(Tmin,Tmax)
-        dict_plots[quant][1].set_ylim(0.,)
-        dict_plots[quant][0].savefig(f"{dir_path}/fullEoS_{quant}_T_{EoS}.png")
+        if(not muBoT):
+            dict_plots[quant][0].savefig(f"{dir_path}/fullEoS_{quant}_T_muB_{EoS}.png")
+        elif(muBoT):
+            dict_plots[quant][0].savefig(f"{dir_path}/fullEoS_{quant}_T_muBoT_{EoS}.png")
         dict_plots[quant][0].clf()
         pl.close(dict_plots[quant][0])
         
@@ -208,7 +224,7 @@ def test_find(EoS):
         # solve the system to find T,muB,muQ,muS
         sol = find_param(EoS,e=e,n_B=nB,n_Q=nQ,n_S=nS)
 
-       # print(sol)
+        #print(sol)
 
         # test accuracy of the find_param function
         # -> compare the found T,muB,muQ,muS to their exact values
@@ -224,9 +240,13 @@ def test_find(EoS):
 if __name__ == "__main__":    
 
     # values of \mu_B where to test the lQCD+HRG EoS
-    tab = [[0.,'r'],[0.2,'tab:orange'],[0.3,'b'],[0.4,'g']]
+    tab = [[0.,'r'],[0.2,'tab:orange'],[0.3,'b'],[0.4,'g'],[0.6,'m']]
     main('muB',tab)
     main('nS0',tab)
+
+    tab = [[0,'r'],[1,'tab:orange'],[2,'b'],[3,'g'],[3.5,'m']]
+    main('muB',tab,muBoT=True)
+    main('nS0',tab,muBoT=True)
 
     # values of s/n_B to test the lQCD+HRG EoS (takes a long time)
     tab = [[420,'r'],[144,'tab:purple'],[94,'m'],[70,'tab:orange'],[51,'tab:olive'],[30,'g']]
