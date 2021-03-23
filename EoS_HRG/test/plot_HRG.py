@@ -41,12 +41,16 @@ def main(EoS,tab,muBoT=False):
         '--species', choices=['all', 'baryons', 'mesons'], default='all',
         help='include only baryons, mesons, or everything in the HRG EoS')
     parser.add_argument(
-        '--offshell', type=str2bool, default=False,
+        '--offshell', type=str2bool, default=True,
         help='account for finite width of resonances and integrate over mass')
     parser.add_argument(
         '--output', type=str2bool, default=False,
         help='write the HRG results in output file')
     args = parser.parse_args()
+
+    # create new directory to save plots if it doesn't already exist
+    if not os.path.exists(f'{dir_path}/plot_HRG/'):
+        os.makedirs(f'{dir_path}/plot_HRG/')
 
     Tmin = args.Tmin
     Tmax = args.Tmax
@@ -56,7 +60,7 @@ def main(EoS,tab,muBoT=False):
 
     print(EoS)
     # quantities to plot
-    list_quant = ['P','n_B','s','e','I']
+    list_quant = ['P','n_B','n_S','s','e','I']
     # initialize plots with lattice data
     dict_plots = plot_lattice(EoS,tab,list_quant,all_labels=False,muBoT=muBoT)
 
@@ -98,9 +102,9 @@ def main(EoS,tab,muBoT=False):
         if(args.output):
             # output data for each \mu_B or \mu_B/T
             if(not muBoT):
-                filename = f"{dir_path}/HRG_muB{int(muB*10):02d}_{EoS}{species_out}.dat"
+                filename = f"{dir_path}/plot_HRG/HRG_muB{int(muB*10):02d}_{EoS}{species_out}.dat"
             elif(muBoT):
-                filename = f"{dir_path}/HRG_muBoT{muB}_{EoS}{species_out}.dat"
+                filename = f"{dir_path}/plot_HRG/HRG_muBoT{muB}_{EoS}{species_out}.dat"
 
             with open(filename,'w') as outfile:
                 outfile.write(",".join(yval.keys()))
@@ -113,6 +117,7 @@ def main(EoS,tab,muBoT=False):
         """
         get max value of lattice data in the range T < Tmax
         """
+        ymin = np.zeros(len(list_quant))
         ymax = np.zeros(len(list_quant))
         for muB,_ in tab:
             if(not muBoT):
@@ -126,20 +131,27 @@ def main(EoS,tab,muBoT=False):
 
             for iq,quant in enumerate(list_quant):
                 dlQCD = paramdata[quant]
-                test = dlQCD.max()
-                if(test>ymax[iq]):
-                    ymax[iq] = test
-        return dict(zip(list_quant,ymax*1.1))
+                if(dlQCD.max()>ymax[iq]):
+                    ymax[iq] = dlQCD.max()
+                if(dlQCD.min()<ymax[iq]):
+                    ymin[iq] = dlQCD.min()
+        return dict(zip(list_quant,ymin*1.1)),dict(zip(list_quant,ymax*1.1))
 
-    max_val = getmax()
+    min_val,max_val = getmax()
     # for each plot, adapt range in (x,y) and export
     for quant in list_quant:
+        if(EoS=='nS0' and quant=='n_S'):
+            continue
+        if(min_val[quant]>0.):
+            min_val[quant] = 0.
+        if(max_val[quant]<0.):
+            max_val[quant] = 0.
         dict_plots[quant][1].set_xlim(Tmin,Tmax)
-        dict_plots[quant][1].set_ylim(0.,max_val[quant])
+        dict_plots[quant][1].set_ylim(min_val[quant],max_val[quant])
         if(not muBoT):
-            dict_plots[quant][0].savefig(f"{dir_path}/HRG_{quant}_T_muB_{EoS}{species_out}.png")
+            dict_plots[quant][0].savefig(f"{dir_path}/plot_HRG/HRG_{quant}_T_muB_{EoS}{species_out}.png")
         elif(muBoT):
-            dict_plots[quant][0].savefig(f"{dir_path}/HRG_{quant}_T_muBoT_{EoS}{species_out}.png")
+            dict_plots[quant][0].savefig(f"{dir_path}/plot_HRG/HRG_{quant}_T_muBoT_{EoS}{species_out}.png")
         dict_plots[quant][0].clf()
         pl.close(dict_plots[quant][0])
 
@@ -213,9 +225,9 @@ def main(EoS,tab,muBoT=False):
             ax[ipl].set_xlim(Tmin,Tmax)
             ax[ipl].set_yscale('log')
             if(not muBoT):
-                f[ipl].savefig(f"{dir_path}/HRG_{quant}_T_muB{int(muB*10):02d}_{EoS}_species.png")
+                f[ipl].savefig(f"{dir_path}/plot_HRG/HRG_{quant}_T_muB{int(muB*10):02d}_{EoS}_species.png")
             elif(muBoT):
-                f[ipl].savefig(f"{dir_path}/HRG_{quant}_T_muBoT{muB}_{EoS}_species.png")
+                f[ipl].savefig(f"{dir_path}/plot_HRG/HRG_{quant}_T_muBoT{muB}_{EoS}_species.png")
             f[ipl].clf()
             pl.close(f[ipl])
 
@@ -243,7 +255,10 @@ def plot_freezeout(dict_yield,**kwargs):
     try:
         plot_file_name = kwargs['plot_file_name']
     except:
-        plot_file_name = f"{dir_path}/HRG_freezeout"
+        # create new directory to save plots if it doesn't already exist
+        if not os.path.exists(f'{dir_path}/plot_freezeout/'):
+            os.makedirs(f'{dir_path}/plot_freezeout/')
+        plot_file_name = f"{dir_path}/plot_freezeout/HRG_freezeout"
 
     # additional plots of chi^2 (takes time)
     try:

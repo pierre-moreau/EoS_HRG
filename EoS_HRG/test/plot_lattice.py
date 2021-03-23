@@ -213,6 +213,10 @@ def main(EoS,tab,muBoT=False):
     )
     args = parser.parse_args()
 
+    # create new directory to save plots if it doesn't already exist
+    if not os.path.exists(f'{dir_path}/plot_lattice/'):
+        os.makedirs(f'{dir_path}/plot_lattice/')
+
     # min/max for the temperature
     Tmin = args.Tmin
     Tmax = args.Tmax
@@ -225,10 +229,12 @@ def main(EoS,tab,muBoT=False):
     dict_plots = plot_lattice(EoS,tab,list_quant,muBoT=muBoT)
     # export plots
     for quant in list_quant:
+        if(EoS=='nS0' and quant=='n_S'):
+            continue
         if(not muBoT):
-            dict_plots[quant][0].savefig(f"{dir_path}/lQCD_{EoS}_{quant}_T_muB.png")
+            dict_plots[quant][0].savefig(f"{dir_path}/plot_lattice/lQCD_{EoS}_{quant}_T_muB.png")
         elif(muBoT):
-            dict_plots[quant][0].savefig(f"{dir_path}/lQCD_{EoS}_{quant}_T_muBoT.png")
+            dict_plots[quant][0].savefig(f"{dir_path}/plot_lattice/lQCD_{EoS}_{quant}_T_muBoT.png")
         dict_plots[quant][0].clf()
         pl.close(dict_plots[quant][0])
 
@@ -236,10 +242,10 @@ def main(EoS,tab,muBoT=False):
     for muB,_ in tab:
         fall,_ = plot_lattice_all(EoS,muB,muBoT=muBoT)
         if(not muBoT):
-            fall.savefig(f"{dir_path}/lQCD_{EoS}_all_muB{int(10.*muB):02d}_T.png")
+            fall.savefig(f"{dir_path}/plot_lattice/lQCD_{EoS}_all_muB{int(10.*muB):02d}_T.png")
             print('  plot \mu_B = '+str(muB)+' GeV')
         elif(muBoT):
-            fall.savefig(f"{dir_path}/lQCD_{EoS}_all_muBoT{muB}_T.png")
+            fall.savefig(f"{dir_path}/plot_lattice/lQCD_{EoS}_all_muBoT{muB}_T.png")
             print('  plot \mu_B/T = '+str(muB))
         fall.clf()
         pl.close(fall)
@@ -260,9 +266,9 @@ def main(EoS,tab,muBoT=False):
 
             # output data for each \mu_B or \mu_B/T
             if(not muBoT):
-                filename = f"{dir_path}/lQCD_muB{int(muB*10):02d}_{EoS}.dat"
+                filename = f"{dir_path}/plot_lattice/lQCD_muB{int(muB*10):02d}_{EoS}.dat"
             elif(muBoT):
-                filename = f"{dir_path}/lQCD_muBoT{muB}_{EoS}.dat"
+                filename = f"{dir_path}/plot_lattice/lQCD_muBoT{muB}_{EoS}.dat"
 
             with open(filename,'w') as outfile:
                 outfile.write(",".join(paramdata.keys()))
@@ -276,14 +282,19 @@ def plot_chi():
     """
     To plot the fit of susceptibilities compared to lQCD results
     """
+    # create new directory to save plots if it doesn't already exist
+    if not os.path.exists(f'{dir_path}/plot_chi/'):
+        os.makedirs(f'{dir_path}/plot_chi/')
+
     # values in T for the plot
-    xtemp = np.arange(0.0975,10.,0.0001)
+    xtemp = np.arange(0.05,10.,0.0001)
     # x-lim for zoom plot
     Tminz = 0.1
     Tmaxz = 0.2
 
     # susceptibilities from HRG
-    xTHRG = np.arange(0.05,0.18,0.01)
+    xTHRG = np.arange(0.05,0.18,0.005)
+    print('Calculating susceptibilities...')
     HRG_chi = HRG(xTHRG,0.,0.,0.,offshell=True,eval_chi=True)['chi']
     HRG_chi_nS0 = EoS_nS0(HRG,xTHRG,0.,offshell=True,eval_chi=True)['chi']
 
@@ -331,16 +342,19 @@ def plot_chi():
         if(chi=='chiB2_nS0'):
             xHRG_chi = HRG_chi_nS0[1]/factorial(2) 
             ls = 'dotted'
+            label = r'limit $T \rightarrow \infty$'
         elif(chi=='chiB4_nS0'):
             xHRG_chi = HRG_chi_nS0[7]/factorial(4)
             ls = 'dotted'
+            label = r'limit $T \rightarrow \infty$'
         else:
             xHRG_chi = HRG_chi[ichi]
             ls = '-'
+            label = 'SB limit'
 
         # SB limit
         for xax in [ax,axins]:
-            xax.plot([5,10],chi_SB[chi]*np.ones(2),linestyle=ls,color='k',linewidth=5,label=r'limit $T \rightarrow \infty$')
+            xax.plot([5,10],chi_SB[chi]*np.ones(2),linestyle=ls,color='k',linewidth=5,label=label)
 
         # HRG
         for xax in [ax,axins]:
@@ -352,13 +366,17 @@ def plot_chi():
 
         # find min / max values for zoom plot
         condHRGT = np.logical_and(xTHRG >= Tminz,xTHRG <= Tmaxz)
-        condparamT = np.logical_and(xtemp >= Tminz,xtemp <= Tmaxz)
+        condparam = np.logical_and(xtemp >= Tminz,xtemp <= Tmaxz)
         conddataT = np.logical_and(data[:,0] >= Tminz,data[:,0] <= Tmaxz)
-        ylimmz = 1.05*min(np.amin(xHRG_chi[condHRGT]),np.amin(y_chi[condparamT]),np.amin(data[:,1][conddataT]-data[:,2][conddataT]))
-        ylimpz = 1.05*max(np.amax(xHRG_chi[condHRGT]),np.amax(y_chi[condparamT]),np.amax(data[:,1][conddataT]+data[:,2][conddataT]))
+        if(abs(np.amin(xHRG_chi[condHRGT]))>abs(np.amax(xHRG_chi[condHRGT]))):
+            ylimmz = 1.1*min(np.amin(data[:,1][conddataT]-data[:,2][conddataT]),np.amin(y_chi[condparam]))
+            ylimpz = 1.1*max(np.amax(xHRG_chi[condHRGT]),np.amax(data[:,1][conddataT]+data[:,2][conddataT]))
+        else:
+            ylimmz = 1.1*min(np.amin(xHRG_chi[condHRGT]),np.amin(data[:,1][conddataT]-data[:,2][conddataT]))
+            ylimpz = 1.1*max(np.amax(data[:,1][conddataT]+data[:,2][conddataT]),np.amax(y_chi[condparam]))
 
         # adjust limits
-        if(ylimm>=0.):
+        if(ylimp>=0. and abs(ylimm)<0.1*ylimp):
             ylimm = -0.05*ylimp
         else:
             ylimp = max(0.05*abs(ylimm),ylimp)
@@ -371,8 +389,17 @@ def plot_chi():
 
         ax.set(xlabel='T [GeV]',ylabel=chi_latex[chi],xscale='log',ylim=[ylimm,ylimp])
         axins.set(xlim=[Tminz,Tmaxz],ylim=[ylimmz,ylimpz])
-        ax.set_xticks([0.1,0.2,0.3,0.5,1,2,3,5,10])
-        ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+        ax.set_xticks([round(0.05,2),round(0.1,1),round(0.2,1),round(0.3,1),round(0.5,1),round(1,0),round(2,0),round(3,0),round(5,0),round(10,0)])
+
+        def f_ticks(number,pos):
+            if(number>=1):
+                return f'{number:.0f}'
+            elif(number>=0.1):
+                return f'{number:.1f}'
+            else:
+                return f'{number:.2f}'
+
+        ax.get_xaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(f_ticks))
 
         # location of lines connecting to the zoom plot
         loc1 = 1
@@ -404,7 +431,7 @@ def plot_chi():
         if(lqcd_data_bool[ilattice]==1):
             ax.legend(title=None, title_fontsize='25', bbox_to_anchor=bbox_to_anchor, loc=loc, borderaxespad=0.5, frameon=False)
 
-        f.savefig(f'{dir_path}/{chi}.png')
+        f.savefig(f'{dir_path}/plot_chi/{chi}.png')
         f.clf()
         pl.close(f)
 

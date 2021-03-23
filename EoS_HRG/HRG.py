@@ -67,13 +67,12 @@ def Bcharge(particle):
     """
     pdg = particle.pdgid
     if(pdg.is_meson):
-        Bcharge = 0.
+        Bcharge = 0
     elif(pdg.is_baryon):
-        match = re.match('([A-Z,a-z]?)([A-Z,a-z]?)([A-Z,a-z]?)', particle.quarks)
-        quark1 = from_name_to_parton(match.group(1))
-        quark2 = from_name_to_parton(match.group(2))
-        quark3 = from_name_to_parton(match.group(3))
-        Bcharge = quark1.Bcharge + quark2.Bcharge + quark3.Bcharge
+        if(pdg>0):
+            Bcharge = 1
+        elif(pdg<0):
+            Bcharge = -1
     return Bcharge
     
 def Qcharge(particle):
@@ -81,7 +80,7 @@ def Qcharge(particle):
     Return electric charge of the paricle object
     """
     Qcharge = particle.charge
-    return Qcharge
+    return int(Qcharge)
 
 def Scharge(particle):
     """
@@ -89,7 +88,7 @@ def Scharge(particle):
     """
     pdg = particle.pdgid
     if(not(pdg.has_strange)):
-        Scharge = 0.
+        Scharge = 0
     else:
         if(pdg.is_meson):
             try:
@@ -98,14 +97,14 @@ def Scharge(particle):
                 quark2 = from_name_to_parton(match.group(2))
                 Scharge = quark1.Scharge + quark2.Scharge
             except:
-                Scharge = 0.
+                Scharge = 0
         elif(pdg.is_baryon):
             match = re.match('([A-Z,a-z]?)([A-Z,a-z]?)([A-Z,a-z]?)', particle.quarks)
             quark1 = from_name_to_parton(match.group(1))
             quark2 = from_name_to_parton(match.group(2))
             quark3 = from_name_to_parton(match.group(3))
             Scharge = quark1.Scharge + quark2.Scharge + quark3.Scharge
-    return Scharge
+    return int(Scharge)
     
 ########################################################################
 def muk(particle,muB,muQ,muS):
@@ -140,7 +139,7 @@ def print_info(part):
     Print info of a particle object
     """
     if not(isinstance(part, list)):
-        print(part,part.pdgid,mass(part),width(part),part.J,part.quarks,Bcharge(part),Qcharge(part),Scharge(part))
+        print(f'{part} {part.pdgid}; mass {mass(part)} [GeV]; width {width(part)} [GeV]; J = {part.J}; {part.quarks}; B,Q,S = {Bcharge(part)},{Qcharge(part)},{Scharge(part)}')
     else:
         for xpart in part:
             print_info(xpart)
@@ -148,20 +147,33 @@ def print_info(part):
 ########################################################################
 # import mesons and baryons to include in the HRG
 ########################################################################
-HRG_mesons = []
+"""
+PHSD_mesons = []
 with open(dir_path+'/mesons_HRG.dat', 'r') as f:
     for line in f.readlines()[2:]:
         str_line = line.rstrip('\n')
-        HRG_mesons.append(to_particle(str_line))
+        PHSD_mesons.append(to_particle(str_line))
 
-HRG_baryons = []
+PHSD_baryons = []
 with open(dir_path+'/baryons_HRG.dat', 'r') as f:
     for line in f.readlines()[2:]:
         str_line = line.rstrip('\n')
-        HRG_baryons.append(to_particle(str_line))
+        PHSD_baryons.append(to_particle(str_line))
+
+HRG_mesons = PHSD_mesons[:]
+HRG_baryons = PHSD_baryons[:]
+"""
+
+HRG_mesons = PDG_mesons[:]
+HRG_baryons = PDG_baryons[:]
 
 #print_info(HRG_mesons)
 #print_info(HRG_baryons)
+
+#for part in HRG_mesons+HRG_baryons:
+#    print_info(part)
+#    print_decays(part)
+#    input("\npause")
 
 ########################################################################
 # Define threshold for decays of unstable mesons and baryons
@@ -217,17 +229,7 @@ mth_all.update(mth_baryons)
 
 ########################################################################
 # threshold mass/width for considering particle as unstable
-thres_off = 0.06
-
-########################################################################
-# check that all threshold energies for unstable particles have been given
-########################################################################
-for part in HRG_mesons + HRG_baryons:
-    if (width(part)/mass(part) > thres_off):
-        try:
-            mth = mth_all[part.name]
-        except:
-            raise Exception(f'decay information missing for particle: {part.name}')
+thres_off = 0.05
 
 ########################################################################
 def norm_BW():
@@ -243,7 +245,12 @@ def norm_BW():
 
         # integration over mass runing from {mmin,mmax}
         # doi:10.1016/j.cpc.2008.08.001
-        mthres = mth_all[part.name]
+        try:
+            mthres = mth_all[part.name]
+        except:
+            # when decays are not precisely known
+            mthres = xmass-2.*xwidth
+            mth_all[part.name] = mthres
         mmin = max(mthres,xmass-2.*xwidth)
         mmax = xmass+2.*xwidth
                 
@@ -309,7 +316,7 @@ def HRG(T,muB,muQ,muS,**kwargs):
             list_part = [to_particle(species)]
             flag_1part = True
         
-        maxk = 10 # max value of k for sum over k
+        maxk = 100 # max value of k for sum over k
 
         for part in list_part:
             # initialize quantities for this particle, sum over k
@@ -347,7 +354,9 @@ def HRG(T,muB,muQ,muS,**kwargs):
                     resultpk = resultpk0*(fug**k+antip/fug**k) # pressure finite mu
 
                     # evaluate if the contribution of the particle is significant or not
-                    if(abs(resultpk/(resultp+resultpk))<=0.01):
+                    if(not eval_chi and abs(resultpk/(resultp+resultpk))<=0.001):
+                        break
+                    elif(eval_chi and abs(resultpk*k**4./(resultpk*k**4.+resultpder[1]))<=0.001):
                         break
 
                     resultp += resultpk
@@ -388,7 +397,9 @@ def HRG(T,muB,muQ,muS,**kwargs):
                     resultpk = resultpk0*((fug**k)+antip/(fug**k))
 
                     # evaluate if the contribution of the particle is significant or not
-                    if(abs(resultpk/(resultp+resultpk))<=0.01):
+                    if(not eval_chi and abs(resultpk/(resultp+resultpk))<=0.001):
+                        break
+                    elif(eval_chi and abs(resultpk*k**4./(resultpk*k**4.+resultpder[1]))<=0.001):
                         break
 
                     resultp += resultpk
