@@ -16,7 +16,7 @@ from EoS_HRG.HRG import HRG
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 ###############################################################################
-def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False):
+def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False,Tmax=None):
     """
     Produce plots with lQCD data of each quantity = 'P', 'n_B', 's' or 'e'
     as a function of T [GeV] for the values of muB [GeV] or muB/T indicated in tab
@@ -31,7 +31,10 @@ def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False):
     # get the range of lattice data in T to plot the parametrization (default values)
     lQCDdata0 = WB_EoS0['T']
     # get the range of lattice data in T to plot the parametrization
-    xval = np.linspace(lQCDdata0.min(),lQCDdata0.max(),50)
+    if(Tmax==None):
+        xval = np.linspace(lQCDdata0.min(),lQCDdata0.max(),50)
+    else:
+        xval = np.linspace(lQCDdata0.min(),Tmax,50)
 
     # initialize plots
     plots = np.array([pl.subplots(figsize=(10,7)) for x in np.arange(len(list_quant))])
@@ -94,7 +97,7 @@ def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False):
 
     dict_plots = {}
     for iq,quant in enumerate(list_quant):
-        if(quant=='n_B' or quant=='s'):
+        if(quant=='n_B' or quant=='n_Q' or quant=='n_S' or quant=='s'):
             ylabel = '$'+quant+'/T^3$'
         elif(quant=='cs^2'):
             ylabel = '$c^2_s$'
@@ -160,7 +163,7 @@ def plot_lattice_all(EoS,muB,wparam=True,muBoT=False):
     smax = WB_EoS0['s'][0].max()
 
     for quant,color,dec in [["P",'r',0.],["n_B",'tab:orange',0.15],["e",'b',0.3],["s",'g',0.45],["I",'m',0.6]]:
-        if(quant=='n_B' or quant=='s'):
+        if(quant=='n_B' or quant=='n_Q' or quant=='n_S' or quant=='s'):
             ylabel = '$'+quant+'/T^3$'
         else:
             ylabel = '$'+quant+'/T^4$'
