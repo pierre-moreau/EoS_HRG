@@ -75,6 +75,98 @@ def Tc_lattice_muBoT(muBoT):
         return Tc_lattice(xmuB)
 
 ###############################################################################
+# SB limits
+###############################################################################
+def SB_lim(T,muB,muQ,muS,Nf=3):
+    """
+    SB limit for p,s,n,e,cs^2
+    """
+    Nc = 3 # number of colors
+    dgq = 2.*Nc # degeneracy factor for quarks
+    dgg = 2.*(Nc**2.-1.) # degeneracy factor for gluons
+
+    # if input is a single temperature value T
+    if(isinstance(T,float)):
+
+        # chemical potential asssociated to each quark
+        mu_u = 1./3.*muB + 2./3.*muQ
+        mu_d = 1./3.*muB - 1./3.*muQ
+        mu_s = 1./3.*muB - 1./3.*muQ - muS
+
+        # list of partons corresponding to the given number of flavors
+        # chemical potentials and charges
+        if(Nf==0):
+            list_mu = []
+            list_B = []
+            list_Q = []
+            list_S =[]
+        elif(Nf==2):
+            list_mu = [mu_u,mu_d]
+            list_B = [1./3.,1./3.]
+            list_Q = [2./3.,-1./3.]
+            list_S =[0.,0.]
+        elif(Nf==3):
+            list_mu = [mu_u,mu_d,mu_s]
+            list_B = [1./3.,1./3.,1./3.]
+            list_Q = [2./3.,-1./3.,-1./3.]
+            list_S = [0.,0.,-1.]
+
+        Pgluons = (pi**2)/90.*dgg
+        Pquarks = dgq*sum([(7*pi**2)/360. + ((mu_q/T)**2)/12. + ((mu_q/T)**4)/(24*pi**2) for mu_q in list_mu])
+        P = Pgluons+Pquarks
+
+        sgluons = 4*(pi**2)/90.*dgg
+        squarks = dgq*sum([(4*7*pi**2)/360. + 2*((mu_q/T)**2)/12.  for mu_q in list_mu])
+        s = sgluons+squarks
+
+        nB = dgq*sum([B_q*((2*(mu_q/T))/12. + (4*(mu_q/T)**3)/(24*pi**2)) for B_q,mu_q in zip(list_B,list_mu)])
+        nQ = dgq*sum([Q_q*((2*(mu_q/T))/12. + (4*(mu_q/T)**3)/(24*pi**2)) for Q_q,mu_q in zip(list_Q,list_mu)])
+        nS = dgq*sum([S_q*((2*(mu_q/T))/12. + (4*(mu_q/T)**3)/(24*pi**2)) for S_q,mu_q in zip(list_S,list_mu)])
+
+        e = s-P+muB/T*nB+muQ/T*nQ+muS/T*nS
+
+        cs2 = 1./3.
+
+    # if the input is a list of temperature values
+    elif(isinstance(T,np.ndarray) or isinstance(T,list)):
+
+        P = np.zeros_like(T)
+        s = np.zeros_like(T)
+        nB = np.zeros_like(T)
+        nQ = np.zeros_like(T)
+        nS = np.zeros_like(T)
+        e = np.zeros_like(T)
+        cs2 = 1./3.*np.ones_like(T)
+        for i,xT in enumerate(T):
+            # see if arrays are also given for chemical potentials
+            try:
+                xmuB = muB[i]
+            except:
+                xmuB = muB
+            try:
+                xmuQ = muQ[i]
+            except:
+                xmuQ = muQ
+            try:
+                xmuS = muS[i]
+            except:
+                xmuS = muS
+            
+            result = SB_lim(xT,xmuB,xmuQ,xmuS,Nf=Nf)
+
+            P[i] = result['P']
+            s[i] = result['s']
+            nB[i] = result['n_B']
+            nQ[i] = result['n_Q']
+            nS[i] = result['n_S']
+            e[i] = result['e']
+
+    else:
+        raise Exception('Problem with input')
+
+    return {'P':P,'s':s,'n_B':nB,'n_Q':nQ,'n_S':nS,'e':e,'I':e-3.*P,'cs^2':cs2}
+
+###############################################################################
 # import data for the parametrization of susceptibilities
 ###############################################################################
 

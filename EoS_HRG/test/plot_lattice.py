@@ -16,7 +16,7 @@ from EoS_HRG.HRG import HRG
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 ###############################################################################
-def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False,Tmax=None):
+def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False,Tmax=None,SB=False):
     """
     Produce plots with lQCD data of each quantity = 'P', 'n_B', 's' or 'e'
     as a function of T [GeV] for the values of muB [GeV] or muB/T indicated in tab
@@ -28,13 +28,18 @@ def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False,Tmax
     elif(EoS == 'muB'):
         title = r'$\mu_Q = \mu_S = 0$'
 
+    # just one legend for everything if no parametrization
+    if(not wparam):
+        all_labels = False
+
     # get the range of lattice data in T to plot the parametrization (default values)
     lQCDdata0 = WB_EoS0['T']
     # get the range of lattice data in T to plot the parametrization
     if(Tmax==None):
-        xval = np.linspace(lQCDdata0.min(),lQCDdata0.max(),50)
-    else:
-        xval = np.linspace(lQCDdata0.min(),Tmax,50)
+        Tmax = lQCDdata0.max()
+
+    xval = np.linspace(lQCDdata0.min(),Tmax,50)
+    x_SB = np.linspace(Tmax*4/5,Tmax,10)
 
     # initialize plots
     plots = np.array([pl.subplots(figsize=(10,7)) for x in np.arange(len(list_quant))])
@@ -44,18 +49,22 @@ def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False,Tmax
     for imuB,[muB,color] in enumerate(tab):
         if(not muBoT):
             xmuB = muB # fixed value of muB
+            xmuB_SB = muB
         elif(muBoT):
             xmuB = muB*xval # fixed value of muB/T
+            xmuB_SB = muB*x_SB
         # parametrization
         # get the parametrization of lQCD data for each \mu_B
         if(EoS!='nS0'):
             paramdata = param(xval,xmuB,0.,0.)
+            SB_data = SB_lim(x_SB,xmuB_SB,0.,0.)
         else:
             paramdata = EoS_nS0(param,xval,xmuB)
+            SB_data = SB_lim(x_SB,xmuB_SB,paramdata['muQ'],paramdata['muS'])
 
         # for each quantity, plot
         for iq,quant in enumerate(list_quant):
-
+            lQCD_exists = False # to record if lQCD exists or not
             # data at mu = 0 from lQCD
             if(muB==0):
                 try:
@@ -63,37 +72,58 @@ def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False,Tmax
                     err = WB_EoS0[quant+'_err']
                     latticeplot, = ax[iq].plot(WB_EoS0['T'],data, 'o', color=color, ms='8', mfc='none')
                     ax[iq].errorbar(WB_EoS0['T'], data, yerr=err, xerr=None, fmt='none', color=color)
-                    first_legend = ax[iq].legend([latticeplot],['lQCD'], loc='lower right', borderaxespad=0., frameon=False)
-                    if(all_labels):
-                        f[iq].gca().add_artist(first_legend)
+                    lQCD_exists = True
                 except:
                     pass
             
+            # SB lim
+            if(SB):
+                SBplot, = ax[iq].plot(x_SB, SB_data[quant], '--', color=color, linewidth='3')
+    
             # data at fixed muB/T from lQCD
             if(muBoT and EoS!='nS0'):
                 try:
                     data = WB_EoS_muBoT2021[f'{quant}(muB/T={muB})']
                     latticeplot, = ax[iq].plot(data[:,0],data[:,1], 'o', color=color, ms='8', mfc='none')
                     ax[iq].errorbar(data[:,0], data[:,1], yerr=data[:,2], xerr=None, fmt='none', color=color)
+                    lQCD_exists = True
                 except:
                     pass
 
+            # create other legend
+            list_plots = []
+            list_legends = []
+            if(SB):
+                list_plots.append(SBplot)
+                list_legends.append('SB limit')
+            if(lQCD_exists):
+                list_plots.append(latticeplot)
+                list_legends.append('lQCD')
+
+            if(((imuB==0 and 'n_' not in quant) or (imuB==1 and 'n_' in quant)) and ((wparam and all_labels) or (not wparam and not all_labels))):
+                full_legend = ax[iq].legend(list_plots,list_legends, loc='lower right', frameon=False)
+                f[iq].gca().add_artist(full_legend)
+
             if(wparam):
                 # now plot parametrization for each muB and each quantity
-                if(quant=='cs^2'):
-                    continue
                 if(all_labels):
                     if(not muBoT):
                         label = r'$ \mu_B = $'+str(muB)+' GeV'
                     elif(muBoT):
                         label = r'$ \mu_B/T = $'+str(muB)
-                    ax[iq].plot(xval,paramdata[quant],'--', ms='8', color=color, label=label)
-                    ax[iq].legend(title='Parametrization', title_fontsize='25', loc='center right', frameon=False)
+                    if(quant!='cs^2'):
+                        ax[iq].plot(xval,paramdata[quant],'--', ms='8', color=color, label=label)
+                        ax[iq].legend(title='Parametrization', title_fontsize='25', loc='center right', frameon=False)
                 else:
-                    if(imuB==0):
+                    if(quant!='cs^2'):
                         paramplot, = ax[iq].plot(xval,paramdata[quant],'--', ms='8', color=color)
-                    else:
-                        ax[iq].plot(xval,paramdata[quant],'--', ms='8', color=color)
+                    if((imuB==0 and 'n_' not in quant) or (imuB==1 and 'n_' in quant)):
+                        if(quant!='cs^2'):
+                            list_plots.append(paramplot)
+                            list_legends.append('lQCD parametrization')
+
+                        full_legend = ax[iq].legend(list_plots,list_legends, loc='lower right', frameon=False)
+                        f[iq].gca().add_artist(full_legend)
 
     dict_plots = {}
     for iq,quant in enumerate(list_quant):
@@ -104,13 +134,6 @@ def plot_lattice(EoS,tab,list_quant,wparam=True,all_labels=True,muBoT=False,Tmax
         else:
             ylabel = '$'+quant+'/T^4$'
         ax[iq].set(xlabel='T [GeV]', ylabel=ylabel, title=title)
-
-        if(not all_labels and quant!='cs^2'):
-            if(wparam):
-                first_legend = ax[iq].legend([latticeplot,paramplot],['lQCD','lQCD parametrization'], loc='lower right', frameon=False)
-            else:
-                first_legend = ax[iq].legend([latticeplot],['lQCD'], loc='lower right', frameon=False)
-            f[iq].gca().add_artist(first_legend)
 
         # return dict of plots
         dict_plots.update({quant:[f[iq],ax[iq]]})
@@ -226,10 +249,10 @@ def main(EoS,tab,muBoT=False):
 
     print(EoS)
     # quantities to plot
-    list_quant = ["P","n_B","n_S","s","e","I",'cs^2']
+    list_quant = ["P","n_B","n_Q","n_S","s","e","I",'cs^2']
 
     # initialize plots for each quantity with lattice data
-    dict_plots = plot_lattice(EoS,tab,list_quant,muBoT=muBoT)
+    dict_plots = plot_lattice(EoS,tab,list_quant,wparam=True,muBoT=muBoT,all_labels=True,SB=True)
     # export plots
     for quant in list_quant:
         if(EoS=='nS0' and quant=='n_S'):
@@ -443,11 +466,11 @@ if __name__ == "__main__":
     # values of \mu_B where to test the parametrization of lQCD data
     tab = [[0,'r'],[0.2,'tab:orange'],[0.3,'b'],[0.4,'g']]
     main('muB',tab)
-    main('nS0',tab)
+    #main('nS0',tab)
     # values of \mu_B/T where to test the parametrization of lQCD data
     tab = [[0,'r'],[1,'tab:orange'],[2,'b'],[3,'g'],[3.5,'m']]
     main('muB',tab,muBoT=True)
-    main('nS0',tab,muBoT=True)
+    #main('nS0',tab,muBoT=True)
     # plot the susceptibilities
     plot_chi()
     
