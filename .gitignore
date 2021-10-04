@@ -9,3 +9,5 @@ dist/
 plot_fit_chi/
 matching/
 HRG_values/
+*.nb
+joblib/

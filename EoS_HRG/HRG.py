@@ -65,14 +65,14 @@ def Bcharge(particle):
     """
     Return Baryon charge of the particle object
     """
-    pdg = particle.pdgid
-    if(pdg.is_meson):
-        Bcharge = 0
-    elif(pdg.is_baryon):
+    if(is_baryon(particle)):
+        pdg = particle.pdgid
         if(pdg>0):
             Bcharge = 1
         elif(pdg<0):
             Bcharge = -1
+    else:
+        Bcharge = 0
     return Bcharge
     
 def Qcharge(particle):
@@ -87,10 +87,10 @@ def Scharge(particle):
     Return strangeness of the particle object
     """
     pdg = particle.pdgid
-    if(not(pdg.has_strange)):
-        Scharge = 0
-    else:
-        if(pdg.is_meson):
+    # check whether particle has a strange quark or not
+    # also check particles whose PDG ID is not valid
+    if(pdg.has_strange or not pdg.is_valid):
+        if(is_meson(particle)):
             try:
                 match = re.match('([A-Z,a-z]?)([A-Z,a-z]?)', particle.quarks)
                 quark1 = from_name_to_parton(match.group(1))
@@ -98,12 +98,16 @@ def Scharge(particle):
                 Scharge = quark1.Scharge + quark2.Scharge
             except:
                 Scharge = 0
-        elif(pdg.is_baryon):
+        elif(is_baryon(particle)):
             match = re.match('([A-Z,a-z]?)([A-Z,a-z]?)([A-Z,a-z]?)', particle.quarks)
             quark1 = from_name_to_parton(match.group(1))
             quark2 = from_name_to_parton(match.group(2))
             quark3 = from_name_to_parton(match.group(3))
             Scharge = quark1.Scharge + quark2.Scharge + quark3.Scharge
+        else:
+            Scharge = 0
+    else:
+        Scharge = 0
     return int(Scharge)
     
 ########################################################################
@@ -116,13 +120,26 @@ def muk(particle,muB,muQ,muS):
     return muk
 
 ########################################################################
+def J(particle):
+    """
+    spin of the particle object
+    """
+    xJ = particle.J
+    # for particles whose PDG ID is not recognized
+    if(xJ==None):
+        if('N(22' in particle.name or 'Lambda(2350)' in particle.name):
+            xJ = 9/2
+        if('Delta(2420)' in particle.name or 'N(2600)' in particle.name):
+            xJ = 11/2
+    return xJ
+
+########################################################################
 def d_spin(particle):
     """
     degeneracy factor of the particle object
     d = 2*J+1
     """
-    J = particle.J
-    return 2*J+1
+    return 2*J(particle)+1
 
 ########################################################################
 def BW(m,M0,gamma):
@@ -139,7 +156,7 @@ def print_info(part):
     Print info of a particle object
     """
     if not(isinstance(part, list)):
-        print(f'{part} {part.pdgid}; mass {mass(part)} [GeV]; width {width(part)} [GeV]; J = {part.J}; {part.quarks}; B,Q,S = {Bcharge(part)},{Qcharge(part)},{Scharge(part)}')
+        print(f'{part} {part.pdgid}; mass {mass(part)} [GeV]; width {width(part)} [GeV]; J = {J(part)}; {part.quarks}; B,Q,S = {Bcharge(part)},{Qcharge(part)},{Scharge(part)}; anti = {to_antiparticle(part) if has_anti(part) else False}')
     else:
         for xpart in part:
             print_info(xpart)
@@ -147,23 +164,6 @@ def print_info(part):
 ########################################################################
 # import mesons and baryons to include in the HRG
 ########################################################################
-"""
-PHSD_mesons = []
-with open(dir_path+'/mesons_HRG.dat', 'r') as f:
-    for line in f.readlines()[2:]:
-        str_line = line.rstrip('\n')
-        PHSD_mesons.append(to_particle(str_line))
-
-PHSD_baryons = []
-with open(dir_path+'/baryons_HRG.dat', 'r') as f:
-    for line in f.readlines()[2:]:
-        str_line = line.rstrip('\n')
-        PHSD_baryons.append(to_particle(str_line))
-
-HRG_mesons = PHSD_mesons[:]
-HRG_baryons = PHSD_baryons[:]
-"""
-
 HRG_mesons = PDG_mesons[:]
 HRG_baryons = PDG_baryons[:]
 
@@ -171,6 +171,7 @@ HRG_baryons = PDG_baryons[:]
 #print_info(HRG_baryons)
 
 #for part in HRG_mesons+HRG_baryons:
+#for part in to_particle(['Lambda','Lambda~','N(1875)+','N(1875)~-','N(1875)~0','N(1880)~-','N(1880)~0']):
 #    print_info(part)
 #    print_decays(part)
 #    input("\npause")
@@ -263,6 +264,7 @@ def norm_BW():
 # evaluate the normalization factor for the spectral function of each particle
 norm = norm_BW()
 
+#@memory.cache
 ########################################################################
 def HRG(T,muB,muQ,muS,**kwargs):
     """
@@ -295,7 +297,7 @@ def HRG(T,muB,muQ,muS,**kwargs):
     except:
         species = 'all' # default - consider all particles
 
-    if(isinstance(T,float)):
+    if(isinstance(T,float) or isinstance(T,np.float64)):
         p = 0.
         ndens = 0.
         nB = 0.
@@ -323,7 +325,7 @@ def HRG(T,muB,muQ,muS,**kwargs):
             resultp = 0.
             resultn = 0.
             results = 0.
-            resultpder = np.zeros(2)
+            resultpder = np.zeros(4)
 
             if(flag_1part):
                 # if just one particle selected, don't count antiparticle contribution
@@ -351,21 +353,25 @@ def HRG(T,muB,muQ,muS,**kwargs):
                     kn2 = kn(2,k*xmass/T)
 
                     resultpk0 = factp*(factB**(k+1.))/(k**2.)*kn2 # pressure at mu=0
-                    resultpk = resultpk0*(fug**k+antip/fug**k) # pressure finite mu
+                    resultpk = resultpk0*(fug**k+antip*fug**(-k)) # pressure finite mu
 
                     # evaluate if the contribution of the particle is significant or not
-                    if(not eval_chi and abs(resultpk/(resultp+resultpk))<=0.001):
+                    if(not eval_chi and abs(resultpk/(resultp+resultpk))<=0.005):
                         break
-                    elif(eval_chi and abs(resultpk*k**4./(resultpk*k**4.+resultpder[1]))<=0.001):
+                    elif(eval_chi and abs(resultpk*k**4./(resultpk*k**4.+resultpder[1]))<=0.005\
+                         and abs(resultpk*k**6./(resultpk*k**6.+resultpder[2]))<=0.005\
+                         and abs(resultpk*k**8./(resultpk*k**8.+resultpder[3]))<=0.005):
                         break
 
                     resultp += resultpk
-                    if(eval_chi):
-                        resultpder += resultpk*np.array([k**2.,k**4.])
-                    resultn += resultpk0*k/T*(fug**k-antip/fug**k) 
+                    resultn += resultpk0*k/T*(fug**k-antip*fug**(-k)) 
                     kn1 = kn(1,k*xmass/T)
                     results += facts*factB**(k+1.)/(k**2.)*((fug**k)*(k*xmass*kn1+(4.*T-k*xmu)*kn2) \
-                                         + antip/(fug**k)*(k*xmass*kn1+(4.*T+k*xmu)*kn2)) 
+                                         + antip*(fug**(-k))*(k*xmass*kn1+(4.*T+k*xmu)*kn2))
+
+                    if(eval_chi):
+                        # derivative of the pressure wrt mu**(2,4,6,8)
+                        resultpder += resultpk*np.array([k**2.,k**4.,k**6.,k**8.])
 
             # unstable particles, integration over mass, weighted with Breit-Wigner spectral function
             else:
@@ -385,7 +391,7 @@ def HRG(T,muB,muQ,muS,**kwargs):
                     return BW(m,xmass,xwidth)*(m**2.)*kn(2,k*m/T)
                 def fs(m,k):
                     return BW(m,xmass,xwidth)*(m**2.)*((fug**k)*(k*m*kn(1,k*m/T)+(4.*T-k*xmu)*kn(2,k*m/T)) \
-                    + antip/(fug**k)*(k*m*kn(1,k*m/T)+(4.*T+k*xmu)*kn(2,k*m/T)))
+                    + antip*(fug**(-k))*(k*m*kn(1,k*m/T)+(4.*T+k*xmu)*kn(2,k*m/T)))
 
                 # precalculate different factors entering thermodynamic quantities
                 factp = dg/(2.*pi**2.)*(T**2.)/xnorm
@@ -394,19 +400,22 @@ def HRG(T,muB,muQ,muS,**kwargs):
                 for k in range(1,maxk+1):
 
                     resultpk0 = integrate.quad(fp, mmin, mmax, epsrel=0.01, args=(k))[0]*factp*(factB**(k+1.))/(k**2.)
-                    resultpk = resultpk0*((fug**k)+antip/(fug**k))
+                    resultpk = resultpk0*((fug**k)+antip*(fug**(-k)))
 
                     # evaluate if the contribution of the particle is significant or not
-                    if(not eval_chi and abs(resultpk/(resultp+resultpk))<=0.001):
+                    if(not eval_chi and abs(resultpk/(resultp+resultpk))<=0.005):
                         break
-                    elif(eval_chi and abs(resultpk*k**4./(resultpk*k**4.+resultpder[1]))<=0.001):
+                    elif(eval_chi and abs(resultpk*k**4./(resultpk*k**4.+resultpder[1]))<=0.005\
+                         and abs(resultpk*k**6./(resultpk*k**6.+resultpder[2]))<=0.005\
+                         and abs(resultpk*k**8./(resultpk*k**8.+resultpder[3]))<=0.005):
                         break
 
                     resultp += resultpk
+                    resultn += resultpk0*k/T*(fug**k-antip*fug**(-k))
+                    results += facts*(factB**(k+1.))/(k**2.)*integrate.quad(fs, mmin, mmax, epsrel=0.01, args=(k))[0]
                     if(eval_chi):
-                        resultpder += resultpk*np.array([k**2.,k**4.]) # derivative wrt (xmu/T)^{2,4} for the susceptibilities
-                    resultn += resultpk0*k/T*(fug**k-antip/fug**k)
-                    results += integrate.quad(fs, mmin, mmax, epsrel=0.01, args=(k))[0]*facts*(factB**(k+1.))/(k**2.)
+                        # derivative of the pressure wrt mu**(2,4,6,8)
+                        resultpder += resultpk*np.array([k**2.,k**4.,k**6.,k**8.])
 
             # dimensioneless quantities
             # sum over particles

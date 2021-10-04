@@ -2,12 +2,15 @@ import numpy as np
 import matplotlib.pyplot as pl
 import os
 import argparse
+import scipy
 
 # import from __init__.py
 from . import *
 from .. import *
 # import the functions to test from HRG.py
-from EoS_HRG.HRG import HRG,fit_freezeout
+from EoS_HRG.HRG import HRG,fit_freezeout,J
+# for Hagedorn spectrum
+from EoS_HRG.HRG import BW,mth_all,norm,thres_off
 # to plot
 from EoS_HRG.test.plot_lattice import plot_lattice 
 from EoS_HRG.fit_lattice import Tc_lattice, Tc_lattice_muBoT, param, EoS_nS0, WB_EoS0
@@ -29,10 +32,10 @@ def main(EoS,tab,muBoT=False):
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
-        '--Tmin', type=float, default=.1,
+        '--Tmin', type=float, default=.11,
         help='minimum temperature [GeV]')
     parser.add_argument(
-        '--Tmax', type=float, default=.2,
+        '--Tmax', type=float, default=.18,
         help='maximum temperature [GeV]')
     parser.add_argument(
         '--Npoints', type=int, default=15,
@@ -62,7 +65,7 @@ def main(EoS,tab,muBoT=False):
     # quantities to plot
     list_quant = ['P','n_B','n_S','s','e','I']
     # initialize plots with lattice data
-    dict_plots = plot_lattice(EoS,tab,list_quant,all_labels=False,muBoT=muBoT)
+    dict_plots = plot_lattice(EoS,tab,list_quant,all_labels=False,wparam=False,muBoT=muBoT)
 
     # initialize values of T to evaluate
     xtemp = np.linspace(Tmin,Tmax,args.Npoints)
@@ -96,7 +99,7 @@ def main(EoS,tab,muBoT=False):
             dict_plots[quant][1].plot(xtemp[cond],yval[quant][cond], color=color, linewidth='2.5', label=label)
             # plot HRG EoS with lighter line above Tc
             dict_plots[quant][1].plot(xtemp,yval[quant], color=color, linewidth='2.5', alpha=0.5)
-            dict_plots[quant][1].legend(bbox_to_anchor=(0.05, 0.75),title='PHSD HRG', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
+            dict_plots[quant][1].legend(bbox_to_anchor=(0.05, 0.75),title='HRG', title_fontsize='25', loc='center left', borderaxespad=0., frameon=False)
 
         # output data
         if(args.output):
@@ -149,9 +152,9 @@ def main(EoS,tab,muBoT=False):
         dict_plots[quant][1].set_xlim(Tmin,Tmax)
         dict_plots[quant][1].set_ylim(min_val[quant],max_val[quant])
         if(not muBoT):
-            dict_plots[quant][0].savefig(f"{dir_path}/plot_HRG/HRG_{quant}_T_muB_{EoS}{species_out}.png")
+            dict_plots[quant][0].savefig(f"{dir_path}/plot_HRG/HRG_{quant}_T_muB_{EoS}{species_out}_all.png")
         elif(muBoT):
-            dict_plots[quant][0].savefig(f"{dir_path}/plot_HRG/HRG_{quant}_T_muBoT_{EoS}{species_out}.png")
+            dict_plots[quant][0].savefig(f"{dir_path}/plot_HRG/HRG_{quant}_T_muBoT_{EoS}{species_out}_all.png")
         dict_plots[quant][0].clf()
         pl.close(dict_plots[quant][0])
 
@@ -416,18 +419,83 @@ def plot_freezeout(dict_yield,**kwargs):
     return {'fit_yields':fit_yields,'fit_ratios':fit_ratios,'snB_yields':snB_yields,'snB_ratios':snB_ratios,\
             'fit_yields_nS0':fit_yields_nS0,'fit_ratios_nS0':fit_ratios_nS0,'snB_yields_nS0':snB_yields_nS0,'snB_ratios_nS0':snB_ratios_nS0}
 
+def H_spectrum(m):
+    """
+    Hadronic spectrum as a function of the mass [GeV]
+    """
+    if(isinstance(m,float)):
+        result = 0.
+        result_w = 0.
+        for hadron in PDG_mesons+PDG_baryons:
+            xmass = mass(hadron)
+            xwidth = width(hadron)
+            try:
+                mthres = mth_all[hadron.name]
+            except:
+                mthres = xmass-2.*xwidth
+            mmin = max(mthres,xmass-2.*xwidth)
+            mmax = xmass+2.*xwidth
+            if(m>=xmass):
+                result += (2*J(hadron)+1)
+            if(m>=mmin):
+                if(m<mmax and xwidth/xmass > thres_off):
+                    result_w += (2*J(hadron)+1)*scipy.integrate.quad(BW, mmin, m, epsrel=0.01, args=(xmass,xwidth))[0]/norm[hadron]
+                else:
+                    result_w += (2*J(hadron)+1)
+
+    elif(isinstance(m,np.ndarray) or isinstance(m,list)):
+        result = np.zeros_like(m)
+        result_w = np.zeros_like(m)
+
+        for im,xm in enumerate(m):
+            result[im],result_w[im] = H_spectrum(xm)
+
+    return result,result_w
+
+def plot_H():
+    """
+    Plot of hadronic spectrum as a function of mass [GeV]
+    """
+    xval = np.linspace(0.,2.5,1000) # m
+    x_fit = np.linspace(0.15,1.75,1000)
+
+    fig,ax = pl.subplots(figsize=(10,7))
+
+    fit_H = lambda m,TH,c,m0: c*np.exp(m/TH)*(m**2.+0.5**2.)**(-5/4)
+
+    result_fit,result_fit_w = H_spectrum(x_fit)
+    param,_ = scipy.optimize.curve_fit(fit_H,x_fit,result_fit,p0=[0.16,0.1,0.5],bounds=([0.1,0.01,0.4],[0.18,1,0.6]))
+    #print(param)
+    param_w,_ = scipy.optimize.curve_fit(fit_H,x_fit,result_fit_w,p0=[0.16,0.1,0.5],bounds=([0.1,0.01,0.4],[0.18,1,0.6]))
+    #print(param_w)
+
+    ax.plot(xval,fit_H(xval,*param_w), '--', color='r', linewidth='4', label=r'$\propto exp(m/T_H) (m^2+m_0^2)^{-5/4}$')
+
+    result,result_w = H_spectrum(xval)
+    ax.plot(xval,result, '-', color='b', linewidth='3', label='PDG 2021')
+    ax.plot(xval,result_w, '--', color='b', linewidth='3', label='PDG 2021 smeared')
+
+    ax.legend(loc='upper left', borderaxespad=0., frameon=False)
+    ax.set(xlabel=r'$m\ [GeV]$',ylabel=r'$\rho(m)\ [GeV^{-1}]$',yscale='log',ylim=(1,None))
+    fig.savefig(f'{dir_path}/H.png')
+
+    fig.clf()
+    pl.close(fig)
+
 ###############################################################################
 if __name__ == "__main__":
     # values of \mu_B where to test the parametrization of lQCD data
     tab = [[0.,'r'],[0.2,'tab:orange'],[0.3,'b'],[0.4,'g']]
     
+    plot_H()
+
     main('muB',tab)
     main('nS0',tab)
 
     tab = [[0,'r'],[1,'tab:orange'],[2,'b'],[3,'g'],[3.5,'m']]
     main('muB',tab,muBoT=True)
     main('nS0',tab,muBoT=True)
-    
+
     # BES STAR data, for tests (PHYSICAL REVIEW C 96, 044904 (2017))
     # just the pions and Lambdas are corrected for feed-down weak decays
     dict_19GeV = {'pi+':161.4,'pi+_err':17.8,'pi-':165.8,'pi-_err':18.3, \
